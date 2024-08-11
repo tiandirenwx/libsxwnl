@@ -153,7 +153,7 @@ JINGWEI GeoPostion::getCityGeoPos() const
 {
     JINGWEI jw0 = {116.3833333, 39.000, "默认", "北京"};
     JINGWEI jw = {};
-    int jwLen = sizeof(JWv_array) / sizeof(JWv_array[0]);
+    constexpr int jwLen = sizeof(JWv_array) / sizeof(JWv_array[0]);
     char ch[jwLen][210][48] = {};
 
     for (int i = 0; i < jwLen; i++) 
