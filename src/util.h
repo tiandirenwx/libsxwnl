@@ -13,5 +13,6 @@ public:
     static void extractParts(const std::string &s, std::string &alphanumeric, std::string &chinese);
     static std::string extractAlphanumeric(const std::string &s);
     static bool isChinese(char32_t c);
+    static std::vector<std::string> replaceAndSplit(const std::string &s,char delimiter,const std::string &pattern);
 };
 

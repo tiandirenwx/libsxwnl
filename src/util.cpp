@@ -1,4 +1,5 @@
 #include "util.h"
+#include <regex>
 
 std::vector<std::string> Util::split(const std::string &str, char delimiter)
 {
@@ -51,5 +52,21 @@ void Util::extractParts(const std::string &s, std::string &alphanumeric, std::st
 bool Util::isChinese(char32_t c)
 {
     return (c >= 0x4E00 && c <= 0x9FFF) || (c >= 0x3400 && c <= 0x4DBF) || (c >= 0x20000 && c <= 0x2A6DF) || (c >= 0x2A700 && c <= 0x2B73F) || (c >= 0x2B740 && c <= 0x2B81F) || (c >= 0x2B820 && c <= 0x2CEAF) || (c >= 0xF900 && c <= 0xFAFF) || (c >= 0x2F800 && c <= 0x2FA1F);
+}
+
+std::vector<std::string> Util::replaceAndSplit(const std::string &s, char delimiter,const std::string &pattern)
+{
+    std::vector<std::string> result;
+    std::regex regexPattern(pattern); // 正则表达式匹配
+    std::string cleaned = std::regex_replace(s, regexPattern, ""); // 移除正则表达
+
+    std::stringstream ss(cleaned);
+    std::string item;
+    while (std::getline(ss, item, delimiter)) {
+        if (!item.empty()) { // 忽略空字符串
+            result.push_back(item);
+        }
+    }
+    return result;
 }
 

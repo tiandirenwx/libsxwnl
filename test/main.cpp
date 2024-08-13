@@ -168,9 +168,9 @@ int main(int argc, char *argv[])
     if (argc == 8 && "bz" == std::string(argv[1]))
     {
         Time birthTime = {std::stoi(argv[3]), std::stoi(argv[4]), std::stoi(argv[5]), std::stod(argv[6]), std::stod(argv[7]), 0};
-        //GeoPostion &gep = GeoPostion::getInstance();
-        //JINGWEI jw = gep.getCityGeoPos();
-        JINGWEI jw={120, 39.9, "默认", "北京"};
+        // GeoPostion &gep = GeoPostion::getInstance();
+        // JINGWEI jw = gep.getCityGeoPos();
+        JINGWEI jw = {120, 39.9, "默认", "北京"};
         SBaziInputPara sBZ;
         sBZ.birthDayTime = birthTime;
         sBZ.calendar = CalendarSolar;
@@ -233,26 +233,8 @@ int main(int argc, char *argv[])
     std::cout << rs2_jxb() << std::endl;
    */
 
-    // 平气八字
-    /*
-    auto nowTime = JD::getNowTime();
-    GeoPostion &gep = GeoPostion::getInstance();
-    JINGWEI jw = gep.getCityGeoPos();
-    SBaziInputPara sBZ;
-    sBZ.birthDayTime = nowTime;
-    sBZ.calendar = CalendarSolar;
-    sBZ.gender = false;
-    sBZ.isAst = true;
-    sBZ.isRun = false;
-    sBZ.isSpec = false;
-    sBZ.jw = jw;
-    sBZ.lifa = YuWuWeiZiPingLifa_DingDongZhi;
-    sBZ.name = "无名";
-    PingQiBazi obj(sBZ);
-    obj.calcBaziPaiPan();
-    auto s = obj.printBazi();
-    std::cout<<s<<std::endl;
-*/
+      
+    
     // 命理八字
     /*
     auto nowTime = JD::getNowTime();
@@ -282,15 +264,15 @@ int main(int argc, char *argv[])
     return 0;
     */
 
-    // 定气节令获取
+    // // 定气节令获取
 
-    for (int i = 1900; i < 2300; i++)
-    {
-        for (int j = 1; j <= 12; j++)
-        {
-            jqCalc(i, j);
-        }
-    }
+    // for (int i = 1900; i < 2300; i++)
+    // {
+    //     for (int j = 1; j <= 12; j++)
+    //     {
+    //         jqCalc(i, j);
+    //     }
+    // }
 
     return 0;
 }

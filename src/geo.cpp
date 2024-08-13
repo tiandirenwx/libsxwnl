@@ -1,6 +1,8 @@
 
 #include "geo.h"
 #include "util.h"
+#include <iostream>
+#include <iomanip>
 
 /****************
  [地理经纬度数据库]
@@ -107,8 +109,12 @@ void GeoPostion::init()
 
 }
 
-void GeoPostion::JWdecode(const std::string &v,double &jin,double &wei)
+void GeoPostion::JWdecode(const std::string &v,double &jin,double &wei) const
 {
+    if (v.length() < 4) {
+        throw std::runtime_error("解码字符串长度不足。");
+    }
+    
     std::vector<int> decoded_v(4);
     for (int i = 0; i < 4; i++)
     {
@@ -149,112 +155,77 @@ JINGWEI GeoPostion::getCityGeoPos(const std::string &pName, const std::string &a
     return getDefaultGeoPos();
 }
 
-JINGWEI GeoPostion::getCityGeoPos() const
-{
-    JINGWEI jw0 = {116.3833333, 39.000, "默认", "北京"};
-    JINGWEI jw = {};
-    constexpr int jwLen = sizeof(JWv_array) / sizeof(JWv_array[0]);
-    char ch[jwLen][210][48] = {};
-
-    for (int i = 0; i < jwLen; i++) 
-    {
-        for (int j = 0, m = 0, k = 0; k < strlen(JWv_array[i]); k++) 
-        {
-            if (JWv_array[i][k] == 0x20) 
-            {
-                j++;
-                m = 0;
-                continue;
-            }
-            if (!isalnum(JWv_array[i][k]) && JWv_array[i][k] != 0x20) 
-            {
-                ch[i][j][m++] = JWv_array[i][k];
-            }
-        }
-    }
-    int num, num0;
-    char str[48];
-
-    while (true) {
-        for (int j = 0; j < jwLen; j++) 
-        {
-            printf("\033[31;1m%02d \033[0;33m%-s\t", j + 1, ch[j][0]);
-            if ((j + 1) % 3 == 0) 
-            {
-                printf("\n");
-            }
-        }
-
-        printf("\n\033[32m请选择您所在的省市，输入'0'手动输入区/县查找");
-
-        scanf("%d", &num);
-        if (num <= 0 || num > jwLen) 
-        {
-            printf("\n\033[您输入的区/县不正确，请重新输入!\n]");
-            continue;
-        }
-        num > 32 ? num %= 33 : 0;
-        num--;
-
-        int i = 1;
-        for (; ch[num][i][0]; i++)
-        {
-            printf("\033[35;1m%02d\033[0;36m%-8s  ", i, ch[num][i]);
-            if (i % 5 == 0) 
-            {
-                printf("\n");
-            }
-        }
-        printf("\n\033[32m(若显示不全请收起输入法)\n请选择您所在的区县,'0'手动输入区/县查找");
-        scanf("%d", &num0);
-        if (num0 <= 0 || num0 >= i)
-        {
-            printf("\n\033[您输入的区/县不正确，请重新输入!\n]");
-            continue;
-        }
-
-        strcpy(str, ch[num][num0]);
-        break;
-
-    }
-
-    for (int i = 0; i < jwLen; i++) 
-    {
-        const char *s = strstr(JWv_array[i] + 8, str);
-        if (s) 
-        {
-            jw.s = std::string(ch[i][0]);
-            jw.x = std::string(str);
-            char a[4] = {(s - 4)[0], (s - 3)[0], (s - 2)[0], (s - 1)[0]};
-            for (char &it: a) 
-            {
-                //对经纬度解压缩
-                if (it > 96) 
-                {
-                    it -= 97 - 36;
-                } 
-                else if (it > 64) 
-                {
-                    it -= 65 - 10;
-                }
-                else 
-                {
-                    it -= 48;
-                }
-            }
-            jw.J = (a[2] + a[3] / 60.0 + 73);
-            jw.W = (a[0] + a[1] / 60.0);
-            break;
-        } else if (i == 31) {
-            printf("查找失败,已设置为默认位置");
-            return jw0;
-        }
-    }
-    return jw;
-}
-
 JINGWEI GeoPostion::getDefaultGeoPos() const
 {
     JINGWEI jw0 = {116.3833333, 39.900, "默认", "北京"};
     return jw0;
 }
+
+JINGWEI GeoPostion::getCityGeoPos() const
+{
+    std::vector<std::vector<std::string>> ch;
+    std::string pattern = "[a-zA-Z0-9]+"; //清理字母数字
+    for (const char *str : JWv_array) {
+        std::string s(str);
+        auto sub_vector = Util::replaceAndSplit(s,' ',pattern);
+        ch.push_back(sub_vector);
+    }
+
+    int num, num0;
+    std::string str;
+
+    while (true) {
+        for (size_t j = 0; j < ch.size(); ++j) {
+            std::cout <<std::left<< "\033[31;1m" << std::setw(1) << std::setfill(' ') 
+                      << (j + 1) << "\033[0;33m " << ch[j][0] << "\t";
+            if ((j + 1) % 3 == 0) {
+                std::cout << std::endl;
+            }
+        }
+
+        std::cout << "\n\033[32m请选择您所在的省市,输入'0'手动输入区/县查找: ";
+        std::cin >> num;
+        if (num <= 0 || num > static_cast<int>(ch.size())) {
+            std::cout << "\n\033[您输入的区/县不正确,请重新输入!\n]";
+            continue;
+        }
+
+        num--;
+        num > ch.size() ? num %= (ch.size() + 1) : 0;
+
+        size_t max_i = ch[num].size();
+        for (int i = 1; !ch[num][i].empty() && i < max_i; ++i) {
+            std::cout <<std::left<< "\033[35;1m"<<std::setw(1) << std::setfill(' ')
+                      << i << "\033[0;36m " << ch[num][i] << "  ";
+            if (i % 5 == 0) {
+                std::cout << std::endl;
+            }
+        }
+        std::cout << "\n\033[32m(若显示不全请收起输入法)\n请选择您所在的区县,'0'手动输入区/县查找: ";
+        std::cin >> num0;
+        if (num0 <= 0 || num0 >= static_cast<int>(max_i)) {
+            std::cout << "\n\033[您输入的区/县不正确，请重新输入!\n";
+            continue;
+        }
+
+        str = ch[num][num0];
+        break;
+    }
+   
+    JINGWEI jw = {};
+
+    const char *pos = std::strstr(JWv_array[num] + 8, str.c_str()); // 从索引8开始查找str
+    if (pos != nullptr) {
+        jw.s = std::string(ch[num][0]);
+        jw.x = std::string(str);
+        std::string astr(pos - 4, pos);
+        JWdecode(astr,jw.J,jw.W);
+    } else {
+        std::cout << "查找失败,已设置为默认位置" << std::endl;
+        return getDefaultGeoPos();
+    }
+
+    return jw;
+}
+
+

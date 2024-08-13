@@ -23,7 +23,7 @@ public:
 		return instance;
 	}
 	void init();
-	void JWdecode(const std::string &v,double &jin,double &wei);
+	void JWdecode(const std::string &v,double &jin,double &wei) const;
 	void SQdecode();
 	JINGWEI getCityGeoPos(const std::string &pName,const std::string &aName) const;
 	JINGWEI getCityGeoPos() const;
