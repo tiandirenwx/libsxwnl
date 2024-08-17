@@ -150,7 +150,7 @@ void printDay(Day &day)
 
 bool checkDayConvert(Day &day, std::string &s)
 {
-    printDay(day);
+    //printDay(day);
     auto sYear = day.getSolarYear();
     auto sMonth = day.getSolarMonth();
     auto sDay = day.getSolarDay();
