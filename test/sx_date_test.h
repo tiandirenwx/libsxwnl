@@ -148,9 +148,13 @@ void printDay(Day &day)
     }
 }
 
-bool checkDayConvert(Day &day, std::string &s)
+bool checkDayConvert(Day &day, std::string &s,bool isFullTest = false)
 {
-    //printDay(day);
+    if (!isFullTest)
+    {
+        printDay(day);
+    }
+
     auto sYear = day.getSolarYear();
     auto sMonth = day.getSolarMonth();
     auto sDay = day.getSolarDay();
@@ -193,7 +197,7 @@ void lunar2solarFullTest()
     {
         std::string strTmp;
 
-        if (checkDayConvert(*dayStart, strTmp))
+        if (checkDayConvert(*dayStart, strTmp, true))
         {
             Day *prevDay = dayStart;
             dayStart = dayStart->after(1);
@@ -235,7 +239,7 @@ void lunar2solarSingleTest(int year, uint8_t month, int day)
 
     Day *dayTmp = sxtwl::fromSolar(year, month, day);
     std::string errStr;
-    auto ret = checkDayConvert(*dayTmp, errStr);
+    auto ret = checkDayConvert(*dayTmp, errStr, false);
     if (!ret)
     {
         std::cout << errStr << std::endl;
