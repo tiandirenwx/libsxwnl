@@ -84,7 +84,7 @@ void EphRspl::secMax(long double jd, long double L, long double fa, long double 
     {
         tt = jd + i / 86400.0;
         secXY(tt, L, fa, high, g);
-        ls = (g.mr + g.sr - sqrt(g.x * g.x + g.y * g.y)) / g.sr / 2.0;
+        ls = (g.mr + g.sr - sqrtl(g.x * g.x + g.y * g.y)) / g.sr / 2.0;
         if (ls > maxsf)
         {
             maxsf = ls, maxjd = tt;
@@ -95,7 +95,7 @@ void EphRspl::secMax(long double jd, long double L, long double fa, long double 
     {
         tt = jd + i / 86400.0;
         secXY(tt, L, fa, high, g);
-        ls = (g.mr + g.sr - sqrt(g.x * g.x + g.y * g.y)) / g.sr / 2;
+        ls = (g.mr + g.sr - sqrtl(g.x * g.x + g.y * g.y)) / g.sr / 2;
         if (ls > maxsf)
         {
             maxsf = ls, maxjd = tt;
@@ -103,7 +103,7 @@ void EphRspl::secMax(long double jd, long double L, long double fa, long double 
     }
     jd = maxjd;
     secXY(jd, L, fa, high, G);
-    rmin = sqrt(G.x * G.x + G.y * G.y);
+    rmin = sqrtl(G.x * G.x + G.y * G.y);
 
     pstSeMax->sun_s = sunShengJ(jd - dt_T(jd) + L / pi2, L, fa, -1) + dt_T(jd); // 日出 统一用力学时
     pstSeMax->sun_j = sunShengJ(jd - dt_T(jd) + L / pi2, L, fa, 1) + dt_T(jd);  // 日没 统一用力学时
@@ -116,14 +116,14 @@ void EphRspl::secMax(long double jd, long double L, long double fa, long double 
         pstSeMax->b1 = G.mr / G.sr;
 
         secXY(pstSeMax->sun_s, L, fa, high, g);                                   // 日出食分
-        pstSeMax->sf2 = (g.mr + g.sr - sqrt(g.x * g.x + g.y * g.y)) / g.sr / 2.0; // 日出食分
+        pstSeMax->sf2 = (g.mr + g.sr - sqrtl(g.x * g.x + g.y * g.y)) / g.sr / 2.0; // 日出食分
         if (pstSeMax->sf2 < 0)
         {
             pstSeMax->sf2 = 0;
         }
 
         secXY(pstSeMax->sun_j, L, fa, high, g);                                 // 日没食分
-        pstSeMax->sf3 = (g.mr + g.sr - sqrt(g.x * g.x + g.y * g.y)) / g.sr / 2; // 日没食分
+        pstSeMax->sf3 = (g.mr + g.sr - sqrtl(g.x * g.x + g.y * g.y)) / g.sr / 2; // 日没食分
         if (pstSeMax->sf3 < 0)
         {
             pstSeMax->sf3 = 0;
@@ -136,7 +136,7 @@ void EphRspl::secMax(long double jd, long double L, long double fa, long double 
             pstSeMax->sT[0] = lineT(g, v, u, g.mr + g.sr, 0);
         }
 
-        pstSeMax->P1 = rad2mrad(atan2(g.x, g.y));                                                     // 初亏位置角
+        pstSeMax->P1 = rad2mrad(atan2l(g.x, g.y));                                                     // 初亏位置角
         pstSeMax->V1 = rad2mrad(pstSeMax->P1 - shiChaJ(pGST2(pstSeMax->sT[0]), L, fa, g.sCJ, g.sCW)); // 这里g.sCJ与g.sCW对应的时间与sT[0]还差了一点，所以有一小点误差，不采用真恒星时也误差一点
 
         pstSeMax->sT[2] = lineT(G, v, u, G.mr + G.sr, 1); // 复圆
@@ -145,7 +145,7 @@ void EphRspl::secMax(long double jd, long double L, long double fa, long double 
             secXY(pstSeMax->sT[2], L, fa, high, g);
             pstSeMax->sT[2] = lineT(g, v, u, g.mr + g.sr, 1);
         }
-        pstSeMax->P2 = rad2mrad(atan2(g.x, g.y));
+        pstSeMax->P2 = rad2mrad(atan2l(g.x, g.y));
         pstSeMax->V2 = rad2mrad(pstSeMax->P2 - shiChaJ(pGST2(pstSeMax->sT[2]), L, fa, g.sCJ, g.sCW)); // 这里g.sCJ与g.sCW对应的时间与sT[2]还差了一点，所以有一小点误差，不采用真恒星时也误差一点
     }
     if (rmin <= G.mr - G.sr)
@@ -240,24 +240,24 @@ void EphRspl::nbj(long double jd)
 
     if (V[3] != 100 && V[5] != 100)
     { // 粗算本影南北距离
-        long double x = (V[2] - V[4]) * cos((V[3] + V[5]) / 2.), y = V[3] - V[5];
-        pstNbj->Vb = toFixed(cs_rEarA * sqrt(x * x + y * y), 0) + "千米";
+        long double x = (V[2] - V[4]) * cosl((V[3] + V[5]) / 2.), y = V[3] - V[5];
+        pstNbj->Vb = toFixed(cs_rEarA * sqrtl(x * x + y * y), 0) + "千米";
     }
 }
 
 long double EphRspl::lineT(_SECXY G, long double v, long double u, long double r, bool n)
 {
     // 已知t1时刻星体位置、速度，求x*x+y*y=r*r时,t的值
-    double b = G.y * v - G.x * u;
-    double A = u * u + v * v;
-    double B = u * b;
-    double C = b * b - r * r * v * v;
-    double D = B * B - A * C;
+    long double b = G.y * v - G.x * u;
+    long double A = u * u + v * v;
+    long double B = u * b;
+    long double C = b * b - r * r * v * v;
+    long double D = B * B - A * C;
     if (D < 0)
     {
         return 0;
     }
-    D = sqrt(D);
+    D = sqrtl(D);
     if (!n)
     {
         D = -D;
@@ -276,7 +276,7 @@ void EphRspl::zbXY(_ZB &p, long double L, long double fa)
     p.mr = cs_sMoon / m[2] / rad;
     p.sr = 959.63 / s[2] / rad * cs_AU;
     //=======日月赤经纬差转为日面中心直角坐标(用于日食)==============
-    p.x = rad2rrad(m[0] - s[0]) * cos((m[1] + s[1]) / 2.0);
+    p.x = rad2rrad(m[0] - s[0]) * cosl((m[1] + s[1]) / 2.0);
     p.y = m[1] - s[1];
 }
 
@@ -289,12 +289,12 @@ void EphRspl::zb0(long double jd)
 
     EphRsgs &rsgsObj = EphRsgs::getInstance();
 
-    pstNbj->P.g = pGST(jd - deltat, deltat) + zd[0] * cos(E + zd[1]); // 真恒星时(不考虑非多项式部分)
+    pstNbj->P.g = pGST(jd - deltat, deltat) + zd[0] * cosl(E + zd[1]); // 真恒星时(不考虑非多项式部分)
     pstNbj->P.S = rsgsObj.sun(jd);
     pstNbj->P.M = rsgsObj.moon(jd);
 
-    double t2 = jd + 60 / 86400.0;
-    pstNbj->Q.g = pGST(t2 - deltat, deltat) + zd[0] * cos(E + zd[1]);
+    long double t2 = jd + 60 / 86400.0;
+    pstNbj->Q.g = pGST(t2 - deltat, deltat) + zd[0] * cosl(E + zd[1]);
     pstNbj->Q.S = rsgsObj.sun(t2);
     pstNbj->Q.M = rsgsObj.moon(t2);
 
@@ -325,8 +325,8 @@ void EphRspl::p2p(long double L, long double fa, _GJW &re, bool fAB, int f)
     zbXY(pstNbj->P, L, fa);
     zbXY(pstNbj->Q, L, fa);
 
-    long double u = q.y - p.y, v = q.x - p.x, a = sqrt(u * u + v * v), r = 959.63 / p.S[2] / rad * cs_AU;
-    long double W = p.S[1] + f * r * v / a, J = p.S[0] - f * r * u / a / cos((W + p.S[1]) / 2.0), R = p.S[2];
+    long double u = q.y - p.y, v = q.x - p.x, a = sqrtl(u * u + v * v), r = 959.63 / p.S[2] / rad * cs_AU;
+    long double W = p.S[1] + f * r * v / a, J = p.S[0] - f * r * u / a / cosl((W + p.S[1]) / 2.0), R = p.S[2];
     Vector3 AA = fAB ? pstNbj->A : pstNbj->B;
 
     COORDP pp = lineEar({J, W, R}, AA, p.g);
@@ -361,7 +361,7 @@ void EphRspl::secXY(long double jd, long double L, long double fa, long double h
     // 基本参数计算
     auto deltat = dt_T(jd); // TD-UT
     Vector2 zd = nutation2(jd / 36525.0);
-    auto gst = pGST(jd - deltat, deltat) + zd[0] * cos(hcjj(jd / 36525.0) + zd[1]); // 真恒星时(不考虑非多项式部分)
+    auto gst = pGST(jd - deltat, deltat) + zd[0] * cosl(hcjj(jd / 36525.0) + zd[1]); // 真恒星时(不考虑非多项式部分)
 
     //=======月亮========
     EphRsgs &rsgsObj = EphRsgs::getInstance();
@@ -390,7 +390,7 @@ void EphRspl::secXY(long double jd, long double L, long double fa, long double h
         re.mr *= cs_sMoon2 / cs_sMoon; // 0.99925;
     }
     //=======日月赤经纬差转为日面中心直角坐标(用于日食)==============
-    re.x = rad2rrad(re.mCJ2 - re.sCJ2) * cos((re.mCW2 + re.sCW2) / 2.0);
+    re.x = rad2rrad(re.mCJ2 - re.sCJ2) * cosl((re.mCW2 + re.sCW2) / 2.0);
     re.y = re.mCW2 - re.sCW2;
     re.t = jd;
 }

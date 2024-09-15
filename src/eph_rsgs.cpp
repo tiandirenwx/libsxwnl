@@ -104,9 +104,9 @@ void EphRsgs::init(long double jd, int n)
     pstPara->setTanf1((cs_k0 + cs_k) / pstPara->getDyj());                     // tanf1半影锥角
     pstPara->setTanf2((cs_k0 - cs_k2) / pstPara->getDyj());                    // tanf2本影锥角
     pstPara->setSrad(cs_k0 / ((a[2] + a[p + 2]) / 2.0 / cs_rEar));
-    pstPara->setBba(sin((a[1] + a[p + 1]) / 2.0));
+    pstPara->setBba(sinl((a[1] + a[p + 1]) / 2.0));
     pstPara->setBba(cs_ba * (1 + (1 - cs_ba2) * pstPara->getBba() * pstPara->getBba() / 2.0));
-    pstPara->setBhc(-atan(tan(E) * sin((a[6] + a[p + 6]) / 2.0))); // 黄交线与赤交线的夹角
+    pstPara->setBhc(-atan(tanl(E) * sinl((a[6] + a[p + 6]) / 2.0))); // 黄交线与赤交线的夹角
 }
 
 Vector3 EphRsgs::chazhi(long double jd, int xt)
@@ -164,7 +164,7 @@ Vector3 EphRsgs::bse2db(Vector3 z, Vector3 I, bool f)
     r[0] = rad2rrad(r[0] + I[0] - I[2]);
     if (f)
     {
-        r[1] = atan(tan(r[1]) / cs_ba2);
+        r[1] = atanl(tanl(r[1]) / cs_ba2);
     }
     return r;
 }
@@ -195,13 +195,13 @@ _VXY EphRsgs::Vxy(long double x, long double y, long double s, long double vx, l
     }
     else
     {
-        h = sqrt(h);
+        h = sqrtl(h);
     }
-    r.vx = pi2 * (sin(s) * h - cos(s) * y);
-    r.vy = pi2 * x * cos(s);
+    r.vx = pi2 * (sinl(s) * h - cosl(s) * y);
+    r.vy = pi2 * x * cosl(s);
     r.Vx = vx - r.vx;
     r.Vy = vy - r.vy;
-    r.V = sqrt(r.Vx * r.Vx + r.Vy * r.Vy);
+    r.V = sqrtl(r.Vx * r.Vx + r.Vy * r.Vy);
     return r;
 }
 _RSM EphRsgs::rSM(long double mR)
@@ -217,7 +217,7 @@ Vector3 EphRsgs::qrd(long double jd, long double dx, long double dy, bool fs)
 { // 求切入点
     long double ba2 = pstPara->getBba() * pstPara->getBba();
     Vector3 M = bseM(jd);
-    double x = M[0], y = M[1];
+    long double x = M[0], y = M[1];
     _RSM B = rSM(M[2]);
     long double r = 0;
     if (fs)
@@ -255,7 +255,7 @@ _FEATURE EphRsgs::feature(long double jd)
     auto vz = (c[2] - a[2]) / tg / 2.0;
     auto ax = (c[0] + a[0] - 2 * b[0]) / tg / tg;
     auto ay = (c[1] + a[1] - 2 * b[1]) / tg / tg;
-    auto v = sqrt(vx * vx + vy * vy), v2 = v * v;
+    auto v = sqrtl(vx * vx + vy * vy), v2 = v * v;
 
     // 影轴在贝塞尔面扫线的特征参数
     re.jdSuo = jd;        // 朔
@@ -274,7 +274,7 @@ _FEATURE EphRsgs::feature(long double jd)
     re.yc = b[1] + vy * t0;                  // 中点坐标y
     re.zc = b[2] + vz * t0 - 1.37 * t0 * t0; // 中点坐标z
     re.D = (vx * b[1] - vy * b[0]) / v;
-    re.d = fabs(re.D); // 直线到圆心的距离
+    re.d = fabsl(re.D); // 直线到圆心的距离
     re.I = bse(re.jd); // 中心点的贝塞尔z轴的赤道坐标及恒星时，(J,W,g)
 
     // 影轴交点判断
@@ -289,7 +289,7 @@ _FEATURE EphRsgs::feature(long double jd)
     }
     if (re.d < 1)
     {
-        dt = sqrt(1 - re.d * re.d) / v;
+        dt = sqrtl(1 - re.d * re.d) / v;
         t2 = t0 - dt, t3 = t0 + dt;                // 中心始终参数
         B2 = rSM(t2 * vz + b[2] - 1.37 * t2 * t2); // 中心线始影半径
         B3 = rSM(t3 * vz + b[2] - 1.37 * t3 * t3); // 中心线终影半径
@@ -298,14 +298,14 @@ _FEATURE EphRsgs::feature(long double jd)
     dt = 0;
     if (re.d < ls)
     {
-        dt = sqrt(ls * ls - re.d * re.d) / v;
+        dt = sqrtl(ls * ls - re.d * re.d) / v;
     }
     t2 = t0 - dt, t3 = t0 + dt; // 偏食始终参数,t2,t3
     ls = 1 + Bc.r1;
     dt = 0;
     if (re.d < ls)
     {
-        dt = sqrt(ls * ls - re.d * re.d) / v;
+        dt = sqrtl(ls * ls - re.d * re.d) / v;
     }
     t4 = t0 - dt, t5 = t0 + dt; // 偏食始终参数,t4,t5
     t6 = -b[0] / vx;            // 视午参数l6
@@ -397,7 +397,7 @@ _FEATURE EphRsgs::feature(long double jd)
     // 食带宽度和时延
     if (F.W != 100)
     {
-        re.dw = std::abs(2 * Bp.r2 * cs_rEar) / sin(re.Sdp[1]);   // 食带宽度
+        re.dw = std::abs(2 * Bp.r2 * cs_rEar) / sinl(re.Sdp[1]);   // 食带宽度
         _VXY llls = Vxy(re.xc, re.yc, re.I[1], re.vx, re.vy); // 求地表影速
         re.tt = 2 * std::abs(Bp.r2) / llls.V;                     // 时延
     }
@@ -436,9 +436,9 @@ Vector4 EphRsgs::nanbei(Vector3 M, long double vx0, long double vy0, long double
         z = sqrt(z);
         x -= (x - M[0]) * z / M[2];
         y -= (y - M[1]) * z / M[2];
-        vx = vx0 - pi2 * (sin(I[1]) * z - cos(I[1]) * y);
-        vy = vy0 - pi2 * cos(I[1]) * x;
-        v = sqrt(vx * vx + vy * vy);
+        vx = vx0 - pi2 * (sinl(I[1]) * z - cosl(I[1]) * y);
+        vy = vy0 - pi2 * cosl(I[1]) * x;
+        v = sqrtl(vx * vx + vy * vy);
         sinA = h * vy / v, cosA = h * vx / v;
         x = M[0] - r * sinA, y = M[1] + r * cosA;
     }
@@ -566,169 +566,4 @@ RSGS_PARA &EphRsgs::getRsgsParaData()
     return *(this->pstPara);
 }
 
-/*
-1.暂时还没有作图工具
-2.可能存在bug
-void RS_GS::elmCpy(mystl::vector<double> &a,int n,mystl::vector<double> b,int m)
-{ //数据元素复制
-   if(!b.size()) return;
-   if(n==-2) n=a.size();
- //  if(m==-2) m=b.size();
-   if(n==-1) n=a.size()-2;
-   if(m==-1) m=b.size()-2;
 
-   if(n>=a.size()) a.push_back(0),a.push_back(0);
-   a[n]=b[m], a[n+1]=b[m+1];
-}
-
-void RS_GS::mQie(mystl::array3 M,double vx0,double vy0,double h, double r,mystl::array3 I, mystl::vector<double> &A,_FLAG &FLAG)
-{ //vx0,vy0为影足速度(也是整个影子速度),h=1计算北界,h=-1计算南界
-   mystl::array4 p=RS_GS::nanbei(M,vx0,vy0,h,r,I);
-   if(!FLAG.f2) FLAG.f2=0;   FLAG.f = p[1]==100?0:1; //记录有无解
-   if(FLAG.f2!=FLAG.f)
-   { //补线头线尾
-     NODE g=lineOvl(p[2],p[3],vx0,vy0,1,RS_GS::bba);
-     double dj;
-     mystl::array3 F;
-     if(g.n){
-      if(FLAG.f) dj=g.R2, F={g.B[0],g.B[1]};
-      else    dj=g.R1, F={g.A[0],g.A[1]};
-      F[2]=0;
-      mystl::array3 I2 = { I[0], I[1], I[2] - dj/sqrt(vx0*vx0+vy0*vy0)*6.28 };  //也可以不重算计算恒星时，直接用I[2]代替，但线头不会严格落在日出日没食甚线上
-      RS_GS::push( RS_GS::bse2db(F,I2,1), A);//有解补线头
-     }
-   }
-   FLAG.f2 = FLAG.f; //记录上次有无解
-
-   if(p[1]!=100) RS_GS::push({p[0],p[1]},A);
-}
-
-_FEATURE RS_GS::jieX(double jd)
-{ //日出日没的初亏食甚复圆线，南北界线等
-  NODE p, ls;
-  int i;
-  _FEATURE re=RS_GS::feature(jd);  //求特征参数
-
-  double T = 1.7*1.7-re.d*re.d; if(T<0) T=0; T=sqrt(T)/re.v+0.01;
-  double t=re.jd-T, N=400, dt=2*T/N;
-  int n1=0, n4=0; //n1切入时序
-
-  _FLAG F1={},F2={},F3={},F4={},F5={},F6;
-  //对日出日没食甚线预置一个点
-  mystl::vector<double> &Ua=re.q1,&Ub=re.q2;
-
-  RS_GS::push({0,0},re.q2); RS_GS::push({0,0},re.q3); RS_GS::push({0,0},re.q4);
-
-  for(i=0;i<=N;i++,t+=dt)
-  {
-   double vx = re.vx+re.ax*(t-re.jdSuo);
-   double vy = re.vy+re.ay*(t-re.jdSuo);
-   mystl::array3 M = RS_GS::bseM(t);    //此刻月亮贝塞尔坐标(其x和y正是影足)
-   _RSM B = RS_GS::rSM(M[2]);  //本半影等
-   double r = B.r1;            //半影半径
-   mystl::array3 I = RS_GS::bse(t);     //贝塞尔坐标参数
-
-   p=cirOvl(1,RS_GS::bba, r,M[0],M[1]); //求椭圆与圆交点
-   if(n1%2) {if(!p.n) n1++;} else {if(p.n) n1++;}
-   if(p.n) { //有交点
-    p.A[2]=p.B[2]=0;  p.A=RS_GS::bse2db(p.A,I,1);  p.B=RS_GS::bse2db(p.B,I,1); //转为地标
-    if(n1==1){ RS_GS::push(p.A,re.p1); RS_GS::push(p.B,re.p2); }//保存第一亏圆界线
-    if(n1==3){ RS_GS::push(p.A,re.p3); RS_GS::push(p.B,re.p4); }//保存第二亏圆界线
-   }
-
-   //日出日没食甚线
-   if( !RS_GS::mDian(M,vx,vy,0,r,I, Ua) ) { if(Ua.size()>0) Ua=re.q3; };
-   if( !RS_GS::mDian(M,vx,vy,1,r,I, Ub) ) { if(Ub.size()>2) Ub=re.q4; };
-   if(t>re.jd){
-     if(Ua.size()==0) Ua=re.q3;
-     if(Ub.size()==2) Ub=re.q4;
-   }
-
-   //求中心线
-   mystl::array3 lls;
-   mystl::array3 pp = RS_GS::bseXY2db(M[0],M[1],I,1);
-   if( pp[1]!=100&&n4==0 || pp[1]==100&&n4==1 )
-   { //从无交点跳到有交点或反之
-     ls=lineOvl(M[0],M[1],vx,vy,1,RS_GS::bba);
-     double dj;
-     if(n4==0) dj=ls.R2,lls=ls.B; //首坐标
-     else      dj=ls.R1,lls=ls.A; //末坐标
-     lls[2]=0;
-     mystl::array3 I2 = {I[0], I[1], I[2] - dj/sqrt(vx*vx+vy*vy)*6.28 };  //也可以不重算计算恒星时，直接用I[2]代替，但线头不会严格落在日出日没食甚线上
-     RS_GS::push( RS_GS::bse2db(lls,I2,1), re.L0 );
-     n4++;
-   }
-   if(pp[1]!=100) RS_GS::push(pp,re.L0); //保存中心线
-
-   //南北界
-   RS_GS::mQie(M,vx,vy, +1, r,          I, re.L1,F1); //半影北界
-   RS_GS::mQie(M,vx,vy, -1, r,          I, re.L2,F2); //半影南界
-   RS_GS::mQie(M,vx,vy, +1, B.r2,       I, re.L3,F3); //本影北界
-   RS_GS::mQie(M,vx,vy, -1, B.r2,       I, re.L4,F4); //本影南界
-   RS_GS::mQie(M,vx,vy, +1, (r+B.r2)/2, I, re.L5,F5); //0.5半影北界
-   RS_GS::mQie(M,vx,vy, -1, (r+B.r2)/2, I, re.L6,F6); //0.5半影南界
-  }
-
-
-  //日出日没食甚线的线头连接
-  RS_GS::elmCpy(re.q3, 0, re.q1,-1); //连接q1和a3,单边界必须
-  RS_GS::elmCpy(re.q4, 0, re.q2,-1); //连接q2和a4,单边界必须
-
-  RS_GS::elmCpy(re.q1,-2, re.L1, 0); //半影北界线西端
-  RS_GS::elmCpy(re.q2,-2, re.L2, 0); //半影南界线西端
-  RS_GS::elmCpy(re.q3, 0, re.L1,-1); //半影北界线东端
-  RS_GS::elmCpy(re.q4, 0, re.L2,-1); //半影南界线东端
-
-  RS_GS::elmCpy(re.q2, 0, re.q1, 0);
-  RS_GS::elmCpy(re.q3,-2, re.q4,-1);
-
-  return re;
-}
-_JIEX2 RS_GS::jieX2(double jd)
-{ //jd力学时
-  _JIEX2 re={};
-  mystl::vector<double> p1, p2, p3;
-
-  if(fabs(jd-RS_GS::Zjd)>0.5) return re;
-
-  int i;
-  COORDP p;
-  double s,x,y,X,Y;
-  mystl::array3 S = RS_GS::sun(jd);   //此刻太阳赤道坐标
-  mystl::array3 M = RS_GS::bseM(jd);  //此刻月亮
-  _RSM B = RS_GS::rSM(M[2]); //本半影等
-  mystl::array3 I = RS_GS::bse(jd);   //贝塞尔坐标参数
-  double Z = M[2];           //月亮的坐标的z量
-
-  double a0=M[0]*M[0]+M[1]*M[1];
-  double a1=a0-B.r2*B.r2;
-  double a2=a0-B.r1*B.r1;
-  double N = 200;
-  for(i=0;i<N;i++)
-  {//第0和第N点是同一点，可形成一个环，但不必计算，因为第0点可能在界外而无效
-    s=i/N*pi2;
-    double cosS=cos(s), sinS=sin(s);
-    X = M[0] + cs_k*cosS, Y = M[1] + cs_k*sinS;
-    //本影
-    x = M[0] + B.r2*cosS, y = M[1] + B.r2*sinS;
-    p = lineEar2(X,Y,Z,  x,y,0,  cs_ba,1,I);
-    if(p.W!=100) RS_GS::push( {p.J,p.W}, p1 );
-    else { if(sqrt(x*x+y*y)>a1) RS_GS::push( RS_GS::bse2db({x,y,0},I,1), p1 ); }
-    //半影
-    x = M[0] + B.r1*cosS, y = M[1] + B.r1*sinS;
-    p = lineEar2(X,Y,Z,  x,y,0,  cs_ba,1,I);
-    if(p.W!=100) RS_GS::push( {p.J,p.W}, p2 );
-    else { if(sqrt(x*x+y*y)>a2) RS_GS::push( RS_GS::bse2db({x,y,0},I,1), p2 ); }
-    //晨昏圈
-    mystl::array3 pp = llrConv({s,0,0},pi_2-S[1]);
-    pp[0] = rad2rrad( pp[0]+S[0]+pi_2-I[2] );
-    RS_GS::push(pp, p3);
-  }
-  p1[p1.size()]=p1[0], p1[p1.size()]=p1[1];
-  p2[p2.size()]=p2[0], p2[p2.size()]=p2[1];
-  p3[p3.size()]=p3[0], p3[p3.size()]=p3[1];
-
-  re.p1=p1, re.p2=p2, re.p3=p3;
-  return re;
-}
-*/

@@ -281,9 +281,9 @@ struct MLBZ
 void mingLiBaZi(double jd, double J, MLBZ &ob)
 { // 命理八字计算。jd为格林尼治UT(J2000起算),J为本地经度,返回在物件ob中
     int i, v;
-    double c;
-    double jd2 = jd + dt_T(jd);                         // 力学时
-    double w = XL::S_aLon(jd2 / 36525.0, -1);           // 此刻太阳视黄经
+    long double c;
+    long double jd2 = jd + dt_T(jd);                         // 力学时
+    long double w = XL::S_aLon(jd2 / 36525.0, -1);           // 此刻太阳视黄经
     int k = int2((w / pi2 * 360 + 45 + 15 * 360) / 30); // 1984年立春起算的节气数(不含中气)
     jd += pty_zty2(jd2 / 36525) + J / M_PI / 2;         // 本地真太阳时(使用低精度算法计算时差)
     ob.bz_zty = JD::timeStr(jd);
@@ -305,7 +305,9 @@ void mingLiBaZi(double jd, double J, MLBZ &ob)
     {                                                                       // 一天中包含有13个纪时
         std::string c = std::string(Gan[(v + i) % 10]) + Zhi[(v + i) % 12]; // 各时辰的八字
         if (SC == i)
+        {
             ob.bz_js = c, c = "\033[31m" + c + "\033[0m"; // 红色显示这时辰
+        }
         ob.bz_JS += (i ? " " : "") + c;
     }
 }
@@ -364,6 +366,7 @@ void jqCalc(int year, int month)
             qk++; // 节气的取值范围是0-23
         }
 
+        //奇数对应是节，偶数对应就是气
         if (d0 == vecZQ[qk] && (qk & 1) == 1)
         {
             Ljq = Jqmc[qk];

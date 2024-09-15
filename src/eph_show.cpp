@@ -127,7 +127,7 @@ std::string rysCalc(Time &d, bool is_utc, bool nasa_r,const JINGWEI &jw)
 			{
 				jd -= -8 / 24.0 + dt_T(jd), td = " UTC"; // 转为UTC(本地时间)
 			}
-			s = s + mc[i] + ":" + JD::JD2str(jd + J2000) + td + "\n";
+			s += mc[i] + ":" + JD::JD2str(jd + J2000) + td + "\n";
 		}
 		s += "食分:" + toFixed(ysplSf, 5) + "\n";
 		s += "食分指月面直径被遮比例\n\n";
@@ -258,7 +258,7 @@ std::string rs2_calc(uint8_t fs, long double jd0, long double step)
 			{
 				continue;
 			}
-			s = s + "\033[31;1m" + JD::JD2str(r.jd + J2000)			   // 时间
+			s += "\033[31;1m" + JD::JD2str(r.jd + J2000)			   // 时间
 				+ "  \033[33m" + to_str(r.D, 4, 7, true)			   // 伽马
 				+ "  \033[32m" + fill_str(r.lx, 2, " ") + "  \033[35m" // 类型
 				+ to_str((r.zxJ * radd), 2, 7) + "," + to_str((r.zxW * radd), 2, 7) + "  \033[34m" + to_str((r.Sdp[0] * radd), 2, 7) + "," + to_str((r.Sdp[1] * radd), 2, 7) + "  " + to_str(r.sf, 4) + "  \033[36m" + to_str(r.dw, 0, 3) + "  \033[37m" + m2fm(r.tt * 86400, 0, 2) + "\033[0m\n";

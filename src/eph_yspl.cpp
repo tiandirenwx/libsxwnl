@@ -14,7 +14,7 @@ long double EphYspl::lineT(RE0 G, long double v, long double u, long double r, b
     {
         return 0;
     }
-    D = sqrt(D);
+    D = sqrtl(D);
     if (!n)
     {
         D = -D;
@@ -41,7 +41,7 @@ void EphYspl::lecXY(long double jd, RE0 &re)
     re.eShadow = (cs_rEarA / zm[2] * rad - (959.63 - 8.794) / zs[2]) * 51 / 50.0;  // 地本影在月球向径处的半径(角秒),式中51/50是大气厚度补偿
     re.eShadow2 = (cs_rEarA / zm[2] * rad + (959.63 + 8.794) / zs[2]) * 51 / 50.0; // 地半影在月球向径处的半径(角秒),式中51/50是大气厚度补偿
 
-    re.x = rad2rrad(zm[0] + PI - zs[0]) * cos((zm[1] - zs[1]) / 2.0);
+    re.x = rad2rrad(zm[0] + PI - zs[0]) * cosl((zm[1] - zs[1]) / 2.0);
     re.y = zm[1] + zs[1];
 
     re.mr = re.e_mRad / rad,
@@ -61,13 +61,13 @@ void EphYspl::lecMax(long double jd)
     sf = 0;
     LX = "";
 
-    jd = XL::MS_aLon_t2(floor((jd - 4) / 29.5306) * PI * 2 + PI) * 36525; // 低精度的朔(误差10分钟),与食甚相差10分钟左右
+    jd = XL::MS_aLon_t2(std::floor((jd - 4) / 29.5306) * PI * 2 + PI) * 36525; // 低精度的朔(误差10分钟),与食甚相差10分钟左右
 
     RE0 g = {}, G = {};
     long double u, v;
 
     // 求极值(平均误差数秒)
-    u = -18461 * sin(0.057109 + 0.23089571958 * jd) * 0.23090 / rad; // 月日黄纬速度差
+    u = -18461 * sinl(0.057109 + 0.23089571958 * jd) * 0.23090 / rad; // 月日黄纬速度差
     v = (XL::M_v(jd / 36525.0) - XL::E_v(jd / 36525.0)) / 36525.0;   // 月日黄经速度差
     lecXY(jd, G);
     jd -= (G.y * u + G.x * v) / (u * u + v * v); // 极值时间
@@ -82,7 +82,7 @@ void EphYspl::lecMax(long double jd)
     jd += dt; // 极值时间
 
     // 求直线到影子中心的最小值
-    long double x = G.x + dt * v, y = G.y + dt * u, rmin = sqrt(x * x + y * y);
+    long double x = G.x + dt * v, y = G.y + dt * u, rmin = sqrtl(x * x + y * y);
     // 注意,以上计算得到了极值及最小距rmin,但没有再次计算极值时刻的半径,对以下的判断造成一定的风险,必要的话可以再算一次。不过必要性不很大，因为第一次极值计算已经很准确了,误差只有几秒
     // 求月球与影子的位置关系
     if (rmin <= G.mr + G.er)

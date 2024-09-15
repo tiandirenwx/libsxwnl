@@ -15,12 +15,12 @@ SunMoonRiseSet::~SunMoonRiseSet()
 
 long double SunMoonRiseSet::getH(long double h, long double w)
 { // h地平纬度,w赤纬,返回时角
-    long double c = (sin(h) - sin(fa) * sin(w)) / cos(fa) / cos(w);
-    if (fabs(c) > 1)
+    long double c = (sinl(h) - sinl(fa) * sinl(w)) / cosl(fa) / cosl(w);
+    if (fabsl(c) > 1)
     {
         return M_PI;
     }
-    return acos(c);
+    return acosl(c);
 };
 
 void SunMoonRiseSet::Mcoord(long double jd, long double H0, SJ &r)

@@ -10,7 +10,7 @@
 // 对超过0-2PI的角度转为0-2PI;
 long double rad2mrad(long double v)
 {
-	v = fmod(v, (2 * PI));
+	v = fmodl(v, (2 * PI));
 	if (v < 0)
 	{
 		return v + 2 * PI;
@@ -21,7 +21,7 @@ long double rad2mrad(long double v)
 // 对超过-PI到PI的角度转为-PI到PI;
 long double rad2rrad(long double v)
 {
-	v = fmod(v, (2 * PI));
+	v = fmodl(v, (2 * PI));
 	if (v <= -PI)
 	{
 		return v + 2 * PI;
@@ -123,7 +123,7 @@ std::string rad2str2(long double d)
 long double mod2(long double a, long double b)
 {
 	long double c = a / b;
-	c -= floor(c);
+	c -= std::floor(c);
 	if (c > 0.5)
 	{
 		c -= 1;
@@ -140,7 +140,7 @@ std::string toFixed(long double z, int n)
 
 std::string fill_str(std::string s, int n, std::string c)
 {
-	int len = s.length();
+	auto len = s.length();
 	for (int i = 0; i < n - len; i++)
 	{
 		s = c + s;
@@ -226,9 +226,9 @@ Vector3 llr2xyz(Vector3 JW)
 {
 	Vector3 r;
 	long double J = JW[0], W = JW[1], R = JW[2];
-	r[0] = R * cos(W) * cos(J);
-	r[1] = R * cos(W) * sin(J);
-	r[2] = R * sin(W);
+	r[0] = R * cosl(W) * cosl(J);
+	r[1] = R * cosl(W) * sinl(J);
+	r[2] = R * sinl(W);
 	return r;
 }
 
@@ -237,9 +237,9 @@ Vector3 xyz2llr(Vector3 xyz)
 {
 	Vector3 r;
 	long double x = xyz[0], y = xyz[1], z = xyz[2];
-	r[2] = sqrt(x * x + y * y + z * z);
-	r[1] = asin(z / r[2]);
-	r[0] = rad2mrad(atan2(y, x));
+	r[2] = sqrtl(x * x + y * y + z * z);
+	r[1] = asinl(z / r[2]);
+	r[0] = rad2mrad(atan2l(y, x));
 	return r;
 }
 
@@ -248,8 +248,8 @@ Vector3 llrConv(Vector3 JW, long double E)
 {
 	Vector3 r;
 	long double J = JW[0], W = JW[1];
-	r[0] = atan2(sin(J) * cos(E) - tan(W) * sin(E), cos(J));
-	r[1] = asin(cos(E) * sin(W) + sin(E) * cos(W) * sin(J));
+	r[0] = atan2l(sinl(J) * cosl(E) - tanl(W) * sinl(E), cosl(J));
+	r[1] = asinl(cosl(E) * sinl(W) + sinl(E) * cosl(W) * sinl(J));
 	r[2] = JW[2];
 	r[0] = rad2mrad(r[0]);
 	return r;
@@ -271,10 +271,10 @@ long double j1_j2(long double J1, long double W1, long double J2, long double W2
 	long double dJ = rad2rrad(J1 - J2), dW = W1 - W2;
 	if (std::abs(dJ) < 1.0 / 1000 && std::abs(dW) < 1.0 / 1000)
 	{
-		dJ *= cos((W1 + W2) / 2.0);
-		return sqrt(dJ * dJ + dW * dW);
+		dJ *= cosl((W1 + W2) / 2.0);
+		return sqrtl(dJ * dJ + dW * dW);
 	}
-	return acos(sin(W1) * sin(W2) + cos(W1) * cos(W2) * cos(dJ));
+	return acosl(sinl(W1) * sinl(W2) + cosl(W1) * cosl(W2) * cosl(dJ));
 }
 
 // 日心球面转地心球面,Z星体球面坐标,A地球球面坐标;
@@ -293,7 +293,7 @@ Vector3 h2g(Vector3 z, Vector3 a)
 long double shiChaJ(long double gst, long double L, long double fa, long double J, long double W)
 {
 	long double H = gst + L - J; // 天体的时角;
-	return rad2mrad(atan2(sin(H), tan(fa) * cos(W) - sin(W) * cos(H)));
+	return rad2mrad(atan2l(sinl(H), tanl(fa) * cosl(W) - sinl(W) * cosl(H)));
 }
 
 //=================================deltat T计算=====================================
@@ -383,12 +383,12 @@ Vector3 CDllr_J2D(long double t, Vector3 llr, std::string mx)
 	long double Z = prece(t, "Z", mx) + llr[0];
 	long double z = prece(t, "z", mx);
 	long double th = prece(t, "th", mx);
-	long double cosW = cos(llr[1]), cosH = cos(th);
-	long double sinW = sin(llr[1]), sinH = sin(th);
-	long double A = cosW * sin(Z);
-	long double B = cosH * cosW * cos(Z) - sinH * sinW;
-	long double C = sinH * cosW * cos(Z) + cosH * sinW;
-	return Vector3{rad2mrad(atan2(A, B) + z), asin(C), llr[2]};
+	long double cosW = cosl(llr[1]), cosH = cosl(th);
+	long double sinW = sinl(llr[1]), sinH = sinl(th);
+	long double A = cosW * sinl(Z);
+	long double B = cosH * cosW * cosl(Z) - sinH * sinW;
+	long double C = sinH * cosW * cosl(Z) + cosH * sinW;
+	return Vector3{rad2mrad(atan2l(A, B) + z), asinl(C), llr[2]};
 }
 // Date赤道转J2000赤道
 Vector3 CDllr_D2J(long double t, Vector3 llr, std::string mx)
@@ -396,12 +396,12 @@ Vector3 CDllr_D2J(long double t, Vector3 llr, std::string mx)
 	long double Z = -prece(t, "z", mx) + llr[0];
 	long double z = -prece(t, "Z", mx);
 	long double th = -prece(t, "th", mx);
-	long double cosW = cos(llr[1]), cosH = cos(th);
-	long double sinW = sin(llr[1]), sinH = sin(th);
-	long double A = cosW * sin(Z);
-	long double B = cosH * cosW * cos(Z) - sinH * sinW;
-	long double C = sinH * cosW * cos(Z) + cosH * sinW;
-	return Vector3{rad2mrad(atan2(A, B) + z), asin(C), llr[2]};
+	long double cosW = cosl(llr[1]), cosH = cosl(th);
+	long double sinW = sinl(llr[1]), sinH = sinl(th);
+	long double A = cosW * sinl(Z);
+	long double B = cosH * cosW * cosl(Z) - sinH * sinW;
+	long double C = sinH * cosW * cosl(Z) + cosH * sinW;
+	return Vector3{rad2mrad(atan2l(A, B) + z), asinl(C), llr[2]};
 }
 
 // 黄道球面坐标_J2000转Date分点,t为儒略世纪数
@@ -452,8 +452,8 @@ Vector2 nutation(long double t, long double zq)
 			if (q < zq)
 				continue;
 		}
-		dL += (B[i + 5] + B[i + 6] * t) * sin(c) + B[i + 7] * cos(c);
-		dE += (B[i + 8] + B[i + 9] * t) * cos(c) + B[i + 10] * sin(c);
+		dL += (B[i + 5] + B[i + 6] * t) * sinl(c) + B[i + 7] * cosl(c);
+		dE += (B[i + 8] + B[i + 9] * t) * cosl(c) + B[i + 10] * sinl(c);
 	}
 	return Vector2{dL /= 10000000 * rad, dE /= 10000000 * rad}; // 返回IAU2000B章动值, dL是黄经章动,dE是交角章动
 }
@@ -462,8 +462,8 @@ Vector2 nutation(long double t, long double zq)
 Vector3 CDnutation(Vector3 z, long double E, long double dL, long double dE)
 {
 	Vector3 r(z);
-	r[0] += (cos(E) + sin(E) * sin(z[0]) * tan(z[1])) * dL - cos(z[0]) * tan(z[1]) * dE; // 赤经章动
-	r[1] += sin(E) * cos(z[0]) * dL + sin(z[0]) * dE;									 // 赤纬章动
+	r[0] += (cosl(E) + sinl(E) * sinl(z[0]) * tanl(z[1])) * dL - cosl(z[0]) * tanl(z[1]) * dE; // 赤经章动
+	r[1] += sinl(E) * cosl(z[0]) * dL + sinl(z[0]) * dE;									 // 赤纬章动
 	r[0] = rad2mrad(r[0]);
 	return r;
 }
@@ -484,8 +484,8 @@ Vector2 nutation2(long double t)
 		{
 			a = 0;
 		}
-		dL += (B[i + 3] + a) * sin(c);
-		dE += B[i + 4] * cos(c);
+		dL += (B[i + 3] + a) * sinl(c);
+		dE += B[i + 4] * cosl(c);
 	}
 	return Vector2{dL / 100.0 / rad, dE / 100.0 / rad}; // 黄经章动,交角章动
 }
@@ -504,7 +504,7 @@ long double nutationLon2(long double t)
 		{
 			a = 0;
 		}
-		dL += (B[i + 3] + a) * sin(B[i] + B[i + 1] * t + B[i + 2] * t2);
+		dL += (B[i + 3] + a) * sinl(B[i] + B[i + 1] * t + B[i + 2] * t2);
 	}
 	return dL / 100.0 / rad;
 }
@@ -514,12 +514,12 @@ long double nutationLon2(long double t)
 long double MQC(long double h)
 {
 	// 大气折射,h是真高度
-	return 0.0002967 / tan(h + 0.003138 / (h + 0.08919));
+	return 0.0002967 / tanl(h + 0.003138 / (h + 0.08919));
 }
 long double MQC2(long double ho)
 {
 	// 大气折射,ho是视高度
-	return -0.0002909 / tan(ho + 0.002227 / (ho + 0.07679));
+	return -0.0002909 / tanl(ho + 0.002227 / (ho + 0.07679));
 }
 
 //=================================视差改正=========================================
@@ -533,11 +533,11 @@ Vector3 parallax(Vector3 z, long double H, long double fa, long double high)
 		dw = cs_AU;
 	}
 	z[2] *= dw;
-	long double r0, x0, y0, z0, f = cs_ba, u = atan(f * tan(fa)), g = z[0] + H;
-	r0 = cs_rEar * cos(u) + high * cos(fa);		// 站点与地地心向径的赤道投影长度
-	z0 = cs_rEar * sin(u) * f + high * sin(fa); // 站点与地地心向径的轴向投影长度
-	x0 = r0 * cos(g);
-	y0 = r0 * sin(g);
+	long double r0, x0, y0, z0, f = cs_ba, u = atanl(f * tanl(fa)), g = z[0] + H;
+	r0 = cs_rEar * cosl(u) + high * cosl(fa);		// 站点与地地心向径的赤道投影长度
+	z0 = cs_rEar * sinl(u) * f + high * sinl(fa); // 站点与地地心向径的轴向投影长度
+	x0 = r0 * cosl(g);
+	y0 = r0 * sinl(g);
 
 	Vector3 s = llr2xyz(z);
 	s[0] -= x0, s[1] -= y0, s[2] -= z0;
@@ -588,7 +588,7 @@ long double XL0_calc(int xt, int zn, long double t, int n)
 		c = 0;
 		for (int64_t j = n1; j < N; j += 3)
 		{
-			c += F[j] * cos(F[j + 1] + t * F[j + 2]);
+			c += F[j] * cosl(F[j + 1] + t * F[j + 2]);
 		}
 		v += c * tn;
 	}
@@ -643,7 +643,7 @@ Vector3 pluto_coord(long double t)
 		long double v = 0;
 		for (int j = 0; j < N; j += 3)
 		{
-			v += ob[j] * sin(ob[j + 1] * T + ob[j + 2] * c0);
+			v += ob[j] * sinl(ob[j + 1] * T + ob[j + 2] * c0);
 		}
 		if (i % 3 == 1)
 		{
@@ -770,7 +770,7 @@ long double XL1_calc(int zn, long double t, int n)
 		c = 0;
 		for (int j = 0; j < N; j += 6)
 		{
-			c += F[j] * cos(F[j + 1] + t * F[j + 2] + t2 * F[j + 3] + t3 * F[j + 4] + t4 * F[j + 5]);
+			c += F[j] * cosl(F[j + 1] + t * F[j + 2] + t2 * F[j + 3] + t3 * F[j + 4] + t4 * F[j + 5]);
 		}
 		v += c * tn;
 	}
@@ -803,7 +803,7 @@ long double gxc_sunLon(long double t)
 {																	  // 太阳光行差,t是世纪数
 	long double v = -0.043126 + 628.301955 * t - 0.000002732 * t * t; // 平近点角
 	long double e = 0.016708634 - 0.000042037 * t - 0.0000001267 * t * t;
-	return (-20.49552 * (1 + e * cos(v))) / rad; // 黄经光行差
+	return (-20.49552 * (1 + e * cosl(v))) / rad; // 黄经光行差
 }
 
 // 黄纬光行差
@@ -821,7 +821,7 @@ long double gxc_moonLon(long double t)
 // 月球纬度光行差,误差0.006"
 long double gxc_moonLat(long double t)
 {
-	return 0.063 * sin(0.057 + 8433.4662 * t + 0.000064 * t * t) / rad;
+	return 0.063 * sinl(0.057 + 8433.4662 * t + 0.000064 * t * t) / rad;
 }
 
 // 传入T是2000年首起算的日数(UT),dt是deltatT(日),精度要求不高时dt可取值为0																					 //传入T是2000年首起算的日数(UT),dt是deltatT(日),精度要求不高时dt可取值为0
@@ -842,22 +842,22 @@ long double pGST2(long double jd)
 // 太阳升降计算。jd儒略日(须接近L当地平午UT)，L地理经度，fa地理纬度，sj=-1升,sj=1降
 long double sunShengJ(long double jd, long double L, long double fa, long double sj)
 {
-	jd = floor(jd + 0.5) - L / pi2;
+	jd = std::floor(jd + 0.5) - L / pi2;
 	for (int i = 0; i < 2; i++)
 	{
 		long double T = jd / 36525, E = (84381.4060 - 46.836769 * T) / rad;	   // 黄赤交角
 		long double t = T + (32 * (T + 1.8) * (T + 1.8) - 20) / 86400 / 36525; // 儒略世纪年数,力学时
-		long double J = (48950621.66 + 6283319653.318 * t + 53 * t * t - 994 + 334166 * cos(4.669257 + 628.307585 * t) + 3489 * cos(4.6261 + 1256.61517 * t) + 2060.6 * cos(2.67823 + 628.307585 * t) * t) / 10000000;
-		long double sinJ = sin(J), cosJ = cos(J);																						  // 太阳黄经以及它的正余弦值
+		long double J = (48950621.66 + 6283319653.318 * t + 53 * t * t - 994 + 334166 * cosl(4.669257 + 628.307585 * t) + 3489 * cosl(4.6261 + 1256.61517 * t) + 2060.6 * cosl(2.67823 + 628.307585 * t) * t) / 10000000;
+		long double sinJ = sinl(J), cosJ = cosl(J);																						  // 太阳黄经以及它的正余弦值
 		long double gst = (0.7790572732640 + 1.00273781191135448 * jd) * pi2 + (0.014506 + 4612.15739966 * T + 1.39667721 * T * T) / rad; // 恒星时(子午圈位置)
-		long double A = atan2(sinJ * cos(E), cosJ);																						  // 太阳赤经
-		long double D = asin(sin(E) * sinJ);																							  // 太阳赤纬
-		long double cosH0 = (sin(-50 * 60 / rad) - sin(fa) * sin(D)) / (cos(fa) * cos(D));
-		if (fabs(cosH0) >= 1)
+		long double A = atan2l(sinJ * cosl(E), cosJ);																						  // 太阳赤经
+		long double D = asinl(sinl(E) * sinJ);																							  // 太阳赤纬
+		long double cosH0 = (sinl(-50 * 60 / rad) - sinl(fa) * sinl(D)) / (cosl(fa) * cosl(D));
+		if (fabsl(cosH0) >= 1)
 		{
 			return 0; // 太阳在地平线上的cos(时角)计算
 		}
-		jd += rad2rrad(sj * acos(cosH0) - (gst + L - A)) / 6.28; //(升降时角-太阳时角)/太阳速度
+		jd += rad2rrad(sj * acosl(cosH0) - (gst + L - A)) / 6.28; //(升降时角-太阳时角)/太阳速度
 	}
 	return jd; // 反回格林尼治UT
 }
@@ -870,16 +870,16 @@ long double pty_zty(long double t)
 
 	long double E, dE, dL, f;
 	Vector3 z;
-	dL = -17.2 * sin(2.1824 - 33.75705 * t) / rad; // 黄经章
-	dE = 9.2 * cos(2.1824 - 33.75705 * t) / rad;   // 交角章
+	dL = -17.2 * sinl(2.1824 - 33.75705 * t) / rad; // 黄经章
+	dE = 9.2 * cosl(2.1824 - 33.75705 * t) / rad;   // 交角章
 	E = hcjj(t) + dE;							   // 真黄赤交角
 
 	// 地球坐标
 	z[0] = XL0_calc(0, 0, t, 50) + PI + gxc_sunLon(t) + dL;
-	z[1] = -(2796 * cos(3.1987 + 8433.46616 * t) + 1016 * cos(5.4225 + 550.75532 * t) + 804 * cos(3.88 + 522.3694 * t)) / 1000000000;
+	z[1] = -(2796 * cosl(3.1987 + 8433.46616 * t) + 1016 * cosl(5.4225 + 550.75532 * t) + 804 * cosl(3.88 + 522.3694 * t)) / 1000000000;
 
 	z = llrConv(z, E); // z太阳地心赤道坐标
-	z[0] -= dL * cos(E);
+	z[0] -= dL * cosl(E);
 
 	L = rad2rrad(L - z[0]);
 	return L / pi2; // 单位是周(天)
@@ -918,15 +918,15 @@ namespace XL
 	long double E_v(long double t)
 	{ // 地球速度,t是世纪数,误差小于万分3
 		long double f = 628.307585 * t;
-		return 628.332 + 21 * sin(1.527 + f) + 0.44 * sin(1.48 + f * 2) + 0.129 * sin(5.82 + f) * t + 0.00055 * sin(4.21 + f) * t * t;
+		return 628.332 + 21 * sinl(1.527 + f) + 0.44 * sinl(1.48 + f * 2) + 0.129 * sinl(5.82 + f) * t + 0.00055 * sinl(4.21 + f) * t * t;
 	}
 
 	// 月球速度计算,传入世经数
 	long double M_v(long double t)
 	{
-		long double v = 8399.71 - 914 * sin(0.7848 + 8328.691425 * t + 0.0001523 * t * t); // 误差小于5%
-		v -= 179 * sin(2.543 + 15542.7543 * t)											   // 误差小于0.3%
-			 + 160 * sin(0.1874 + 7214.0629 * t) + 62 * sin(3.14 + 16657.3828 * t) + 34 * sin(4.827 + 16866.9323 * t) + 22 * sin(4.9 + 23871.4457 * t) + 12 * sin(2.59 + 14914.4523 * t) + 7 * sin(0.23 + 6585.7609 * t) + 5 * sin(0.9 + 25195.624 * t) + 5 * sin(2.32 - 7700.3895 * t) + 5 * sin(3.88 + 8956.9934 * t) + 5 * sin(0.49 + 7771.3771 * t);
+		long double v = 8399.71 - 914 * sinl(0.7848 + 8328.691425 * t + 0.0001523 * t * t); // 误差小于5%
+		v -= 179 * sinl(2.543 + 15542.7543 * t)											   // 误差小于0.3%
+			 + 160 * sinl(0.1874 + 7214.0629 * t) + 62 * sinl(3.14 + 16657.3828 * t) + 34 * sinl(4.827 + 16866.9323 * t) + 22 * sinl(4.9 + 23871.4457 * t) + 12 * sinl(2.59 + 14914.4523 * t) + 7 * sinl(0.23 + 6585.7609 * t) + 5 * sinl(0.9 + 25195.624 * t) + 5 * sinl(2.32 - 7700.3895 * t) + 5 * sinl(3.88 + 8956.9934 * t) + 5 * sinl(0.49 + 7771.3771 * t);
 		return v;
 	}
 
@@ -1013,9 +1013,9 @@ namespace XL
 		long double t, v = 7771.37714500204;
 		t = (W + 1.08472) / v;
 		long double L, t2 = t * t;
-		t -= (-0.00003309 * t2 + 0.10976 * cos(0.784758 + 8328.6914246 * t + 0.000152292 * t2) + 0.02224 * cos(0.18740 + 7214.0628654 * t - 0.00021848 * t2) - 0.03342 * cos(4.669257 + 628.307585 * t)) / v;
-		L = M_Lon(t, 20) - (4.8950632 + 628.3319653318 * t + 0.000005297 * t * t + 0.0334166 * cos(4.669257 + 628.307585 * t) + 0.0002061 * cos(2.67823 + 628.307585 * t) * t + 0.000349 * cos(4.6261 + 1256.61517 * t) - 20.5 / rad);
-		v = 7771.38 - 914 * sin(0.7848 + 8328.691425 * t + 0.0001523 * t * t) - 179 * sin(2.543 + 15542.7543 * t) - 160 * sin(0.1874 + 7214.0629 * t);
+		t -= (-0.00003309 * t2 + 0.10976 * cosl(0.784758 + 8328.6914246 * t + 0.000152292 * t2) + 0.02224 * cosl(0.18740 + 7214.0628654 * t - 0.00021848 * t2) - 0.03342 * cosl(4.669257 + 628.307585 * t)) / v;
+		L = M_Lon(t, 20) - (4.8950632 + 628.3319653318 * t + 0.000005297 * t * t + 0.0334166 * cosl(4.669257 + 628.307585 * t) + 0.0002061 * cosl(2.67823 + 628.307585 * t) * t + 0.000349 * cosl(4.6261 + 1256.61517 * t) - 20.5 / rad);
+		v = 7771.38 - 914 * sinl(0.7848 + 8328.691425 * t + 0.0001523 * t * t) - 179 * sinl(2.543 + 15542.7543 * t) - 160 * sinl(0.1874 + 7214.0629 * t);
 		t += (W - L) / v;
 		return t;
 	}
@@ -1024,8 +1024,8 @@ namespace XL
 	{ // 已知太阳视黄经反求时间,高速低精度,最大误差不超过600秒
 		long double t, L, v = 628.3319653318;
 		t = (W - 1.75347 - PI) / v;
-		t -= (0.000005297 * t * t + 0.0334166 * cos(4.669257 + 628.307585 * t) + 0.0002061 * cos(2.67823 + 628.307585 * t) * t) / v;
-		t += (W - E_Lon(t, 8) - PI + (20.5 + 17.2 * sin(2.1824 - 33.75705 * t)) / rad) / v;
+		t -= (0.000005297 * t * t + 0.0334166 * cosl(4.669257 + 628.307585 * t) + 0.0002061 * cosl(2.67823 + 628.307585 * t) * t) / v;
+		t += (W - E_Lon(t, 8) - PI + (20.5 + 17.2 * sinl(2.1824 - 33.75705 * t)) / rad) / v;
 		return t;
 	}
 
@@ -1036,14 +1036,14 @@ namespace XL
 		D = (297.8502042 + 445267.1115168 * t - 0.0016300 * t2 + t3 / 545868 - t4 / 113065000) * dm; // 日月平距角
 		M = (357.5291092 + 35999.0502909 * t - 0.0001536 * t2 + t3 / 24490000) * dm;				 // 太阳平近点
 		m = (134.9634114 + 477198.8676313 * t + 0.0089970 * t2 + t3 / 69699 - t4 / 14712000) * dm;	 // 月亮平近点
-		a = PI - D + (-6.289 * sin(m) + 2.100 * sin(M) - 1.274 * sin(D * 2 - m) - 0.658 * sin(D * 2) - 0.214 * sin(m * 2) - 0.110 * sin(D)) * dm;
-		return (1 + cos(a)) / 2;
+		a = PI - D + (-6.289 * sinl(m) + 2.100 * sinl(M) - 1.274 * sinl(D * 2 - m) - 0.658 * sinl(D * 2) - 0.214 * sinl(m * 2) - 0.110 * sinl(D)) * dm;
+		return (1 + cosl(a)) / 2;
 	}
 
 	// 转入地平纬度及地月质心距离,返回站心视半径(角秒)
 	long double moonRad(long double r, long double h)
 	{
-		return cs_sMoon / r * (1 + sin(h) * cs_rEar / r);
+		return cs_sMoon / r * (1 + sinl(h) * cs_rEar / r);
 	}
 
 	// 求月亮近点时间和距离,t为儒略世纪数力学时
@@ -1389,7 +1389,7 @@ namespace XL
 		long double E = hcjj(T) + dE;		// 真黄赤交角
 
 		long double gstPing = pGST2(jd);		 // 平恒星时
-		long double gst = gstPing + dL * cos(E); // 真恒星时(不考虑非多项式部分)
+		long double gst = gstPing + dL * cosl(E); // 真恒星时(不考虑非多项式部分)
 
 		Vector3 z, a, z2, a2;
 		std::string s;
@@ -1477,8 +1477,8 @@ COORDP lineEar(Vector3 P, Vector3 Q, long double gst)
 		r.J = r.W = 100.0;
 		return r;
 	} // 反回100表示无解
-	r.W = atan(r.z / cs_ba2 / sqrt(r.x * r.x + r.y * r.y));
-	r.J = rad2rrad(atan2(r.y, r.x) - gst);
+	r.W = atanl(r.z / cs_ba2 / sqrtl(r.x * r.x + r.y * r.y));
+	r.J = rad2rrad(atan2l(r.y, r.x) - gst);
 	return r;
 }
 
@@ -1495,22 +1495,22 @@ COORDP lineEll(long double x1, long double y1, long double z1, long double x2, l
 	{
 		return p; // 判别式小于0无解
 	}
-	D = sqrt(p.D);
+	D = sqrtl(p.D);
 	if (B < 0)
 	{
 		D = -D; // 只求靠近x1的交点
 	}
 	t = (-B + D) / A;
 	p.x = x1 + dx * t, p.y = y1 + dy * t, p.z = z1 + dz * t;
-	R = sqrt(dx * dx + dy * dy + dz * dz);
-	p.R1 = R * fabs(t), p.R2 = R * fabs(t - 1); // R1,R2分别为x1,x2到交点的距离
+	R = sqrtl(dx * dx + dy * dy + dz * dz);
+	p.R1 = R * fabsl(t), p.R2 = R * fabsl(t - 1); // R1,R2分别为x1,x2到交点的距离
 	return p;
 }
 
 COORDP lineEar2(long double x1, long double y1, long double z1, long double x2, long double y2, long double z2, long double e, long double r, Vector3 I)
 {
 	// I是贝塞尔坐标参数
-	long double P = cos(I[1]), Q = sin(I[1]);
+	long double P = cosl(I[1]), Q = sinl(I[1]);
 	long double X1 = x1, Y1 = P * y1 - Q * z1, Z1 = Q * y1 + P * z1;
 	long double X2 = x2, Y2 = P * y2 - Q * z2, Z2 = Q * y2 + P * z2;
 	COORDP p = lineEll(X1, Y1, Z1, X2, Y2, Z2, e, r);
@@ -1519,8 +1519,8 @@ COORDP lineEar2(long double x1, long double y1, long double z1, long double x2, 
 	{
 		return p;
 	}
-	p.J = rad2rrad(atan2(p.y, p.x) + I[0] - I[2]);
-	p.W = atan(p.z / e / e / sqrt(p.x * p.x + p.y * p.y));
+	p.J = rad2rrad(atan2l(p.y, p.x) + I[0] - I[2]);
+	p.W = atanl(p.z / e / e / sqrtl(p.x * p.x + p.y * p.y));
 	return p;
 }
 
@@ -1546,13 +1546,13 @@ NODE lineOvl(long double x1, long double y1, long double dx, long double dy, lon
 	{
 		p.n = 2;
 	}
-	D = sqrt(D);
+	D = sqrtl(D);
 	t1 = (-B + D) / A, t2 = (-B - D) / A;
 	p.A = {x1 + dx * t1, y1 + dy * t1, 0};
 	p.B = {x1 + dx * t2, y1 + dy * t2, 0};
-	L = sqrt(dx * dx + dy * dy);
-	p.R1 = L * fabs(t1); // x1到交点1的距离
-	p.R2 = L * fabs(t2); // x1到交点2的距离
+	L = sqrtl(dx * dx + dy * dy);
+	p.R1 = L * fabsl(t1); // x1到交点1的距离
+	p.R2 = L * fabsl(t2); // x1到交点2的距离
 	return p;
 }
 
@@ -1560,15 +1560,15 @@ NODE cirOvl(long double R, long double ba, long double R2, long double x0, long 
 {
 	// 椭圆与圆的交点,R椭圆长半径,R2圆半径,x0,y0圆的圆心
 	NODE re = {};
-	long double d = sqrt(x0 * x0 + y0 * y0);
+	long double d = sqrtl(x0 * x0 + y0 * y0);
 	long double sinB = y0 / d, cosB = x0 / d;
 	long double cosA = (R * R + d * d - R2 * R2) / (2 * d * R);
-	if (fabs(cosA) > 1)
+	if (fabsl(cosA) > 1)
 	{
 		re.n = 0;
 		return re;
 	} // 无解
-	long double sinA = sqrt(1 - cosA * cosA);
+	long double sinA = sqrtl(1 - cosA * cosA);
 
 	long double g, ba2 = ba * ba, C, S;
 	int k;
@@ -1577,12 +1577,12 @@ NODE cirOvl(long double R, long double ba, long double R2, long double x0, long 
 		S = cosA * sinB + sinA * cosB * k;
 		g = R - S * S * (1 / ba2 - 1) / 2;
 		cosA = (g * g + d * d - R2 * R2) / (2 * d * g);
-		if (fabs(cosA) > 1)
+		if (fabsl(cosA) > 1)
 		{
 			re.n = 0;
 			return re;
 		} // 无解
-		sinA = sqrt(1 - cosA * cosA);
+		sinA = sqrtl(1 - cosA * cosA);
 		C = cosA * cosB - sinA * sinB * k;
 		S = cosA * sinB + sinA * cosB * k;
 		if (k == 1)
@@ -1613,49 +1613,49 @@ _ECFAST ecFast(long double jd)
 	t2 = t * t, t3 = t2 * t, t4 = t3 * t;
 	L = (93.2720993 + 483202.0175273 * t - 0.0034029 * t2 - t3 / 3526000 + t4 / 863310000) / 180 * PI;
 	re.ac = 1, re.lx = "N";
-	if (fabs(sin(L)) > 0.4)
+	if (fabsl(sinl(L)) > 0.4)
 	{
 		return re; // 一般大于21度已不可能
 	}
 
-	t -= (-0.0000331 * t * t + 0.10976 * cos(0.785 + 8328.6914 * t)) / 7771;
+	t -= (-0.0000331 * t * t + 0.10976 * cosl(0.785 + 8328.6914 * t)) / 7771;
 	t2 = t * t;
 	L = -1.084719 + 7771.377145013 * t - 0.0000331 * t2 +
-		(22640 * cos(0.785 + 8328.6914 * t + 0.000152 * t2) + 4586 * cos(0.19 + 7214.063 * t - 0.000218 * t2) + 2370 * cos(2.54 + 15542.754 * t - 0.000070 * t2) + 769 * cos(3.1 + 16657.383 * t) + 666 * cos(1.5 + 628.302 * t) + 412 * cos(4.8 + 16866.93 * t) + 212 * cos(4.1 - 1114.63 * t) + 205 * cos(0.2 + 6585.76 * t) + 192 * cos(4.9 + 23871.45 * t) + 165 * cos(2.6 + 14914.45 * t) + 147 * cos(5.5 - 7700.39 * t) + 125 * cos(0.5 + 7771.38 * t) + 109 * cos(3.9 + 8956.99 * t) + 55 * cos(5.6 - 1324.18 * t) + 45 * cos(0.9 + 25195.62 * t) + 40 * cos(3.8 - 8538.24 * t) + 38 * cos(4.3 + 22756.82 * t) + 36 * cos(5.5 + 24986.07 * t) - 6893 * cos(4.669257 + 628.3076 * t) - 72 * cos(4.6261 + 1256.62 * t) - 43 * cos(2.67823 + 628.31 * t) * t + 21) / rad;
+		(22640 * cosl(0.785 + 8328.6914 * t + 0.000152 * t2) + 4586 * cosl(0.19 + 7214.063 * t - 0.000218 * t2) + 2370 * cosl(2.54 + 15542.754 * t - 0.000070 * t2) + 769 * cosl(3.1 + 16657.383 * t) + 666 * cosl(1.5 + 628.302 * t) + 412 * cosl(4.8 + 16866.93 * t) + 212 * cosl(4.1 - 1114.63 * t) + 205 * cosl(0.2 + 6585.76 * t) + 192 * cosl(4.9 + 23871.45 * t) + 165 * cosl(2.6 + 14914.45 * t) + 147 * cosl(5.5 - 7700.39 * t) + 125 * cosl(0.5 + 7771.38 * t) + 109 * cosl(3.9 + 8956.99 * t) + 55 * cosl(5.6 - 1324.18 * t) + 45 * cosl(0.9 + 25195.62 * t) + 40 * cosl(3.8 - 8538.24 * t) + 38 * cosl(4.3 + 22756.82 * t) + 36 * cosl(5.5 + 24986.07 * t) - 6893 * cosl(4.669257 + 628.3076 * t) - 72 * cosl(4.6261 + 1256.62 * t) - 43 * cosl(2.67823 + 628.31 * t) * t + 21) / rad;
 
-	t += (W - L) / (7771.38 - 914 * sin(0.7848 + 8328.691425 * t + 0.0001523 * t2) - 179 * sin(2.543 + 15542.7543 * t) - 160 * sin(0.1874 + 7214.0629 * t));
+	t += (W - L) / (7771.38 - 914 * sinl(0.7848 + 8328.691425 * t + 0.0001523 * t2) - 179 * sinl(2.543 + 15542.7543 * t) - 160 * sinl(0.1874 + 7214.0629 * t));
 	re.jd = re.jdSuo = jd = t * 36525; // 朔时刻
 
 	// 纬 52,15 (角秒)
 	t2 = t * t / 10000, t3 = t2 * t / 10000;
-	mB = 18461 * cos(0.0571 + 8433.46616 * t - 0.640 * t2 - 1 * t3) + 1010 * cos(2.413 + 16762.1576 * t + 0.88 * t2 + 25 * t3) + 1000 * cos(5.440 - 104.7747 * t + 2.16 * t2 + 26 * t3) + 624 * cos(0.915 + 7109.2881 * t + 0 * t2 + 7 * t3) + 199 * cos(1.82 + 15647.529 * t - 2.8 * t2 - 19 * t3) + 167 * cos(4.84 - 1219.403 * t - 1.5 * t2 - 18 * t3) + 117 * cos(4.17 + 23976.220 * t - 1.3 * t2 + 6 * t3) + 62 * cos(4.8 + 25090.849 * t + 2 * t2 + 50 * t3) + 33 * cos(3.3 + 15437.980 * t + 2 * t2 + 32 * t3) + 32 * cos(1.5 + 8223.917 * t + 4 * t2 + 51 * t3) + 30 * cos(1.0 + 6480.986 * t + 0 * t2 + 7 * t3) + 16 * cos(2.5 - 9548.095 * t - 3 * t2 - 43 * t3) + 15 * cos(0.2 + 32304.912 * t + 0 * t2 + 31 * t3) + 12 * cos(4.0 + 7737.590 * t) + 9 * cos(1.9 + 15019.227 * t) + 8 * cos(5.4 + 8399.709 * t) + 8 * cos(4.2 + 23347.918 * t) + 7 * cos(4.9 - 1847.705 * t) + 7 * cos(3.8 - 16133.856 * t) + 7 * cos(2.7 + 14323.351 * t);
+	mB = 18461 * cosl(0.0571 + 8433.46616 * t - 0.640 * t2 - 1 * t3) + 1010 * cosl(2.413 + 16762.1576 * t + 0.88 * t2 + 25 * t3) + 1000 * cosl(5.440 - 104.7747 * t + 2.16 * t2 + 26 * t3) + 624 * cosl(0.915 + 7109.2881 * t + 0 * t2 + 7 * t3) + 199 * cosl(1.82 + 15647.529 * t - 2.8 * t2 - 19 * t3) + 167 * cosl(4.84 - 1219.403 * t - 1.5 * t2 - 18 * t3) + 117 * cosl(4.17 + 23976.220 * t - 1.3 * t2 + 6 * t3) + 62 * cosl(4.8 + 25090.849 * t + 2 * t2 + 50 * t3) + 33 * cosl(3.3 + 15437.980 * t + 2 * t2 + 32 * t3) + 32 * cosl(1.5 + 8223.917 * t + 4 * t2 + 51 * t3) + 30 * cosl(1.0 + 6480.986 * t + 0 * t2 + 7 * t3) + 16 * cosl(2.5 - 9548.095 * t - 3 * t2 - 43 * t3) + 15 * cosl(0.2 + 32304.912 * t + 0 * t2 + 31 * t3) + 12 * cosl(4.0 + 7737.590 * t) + 9 * cosl(1.9 + 15019.227 * t) + 8 * cosl(5.4 + 8399.709 * t) + 8 * cosl(4.2 + 23347.918 * t) + 7 * cosl(4.9 - 1847.705 * t) + 7 * cosl(3.8 - 16133.856 * t) + 7 * cosl(2.7 + 14323.351 * t);
 	mB /= rad;
 
 	// 距 106, 23 (千米)
-	mR = 385001 + 20905 * cos(5.4971 + 8328.691425 * t + 1.52 * t2 + 25 * t3) + 3699 * cos(4.900 + 7214.06287 * t - 2.18 * t2 - 19 * t3) + 2956 * cos(0.972 + 15542.75429 * t - 0.66 * t2 + 6 * t3) + 570 * cos(1.57 + 16657.3828 * t + 3.0 * t2 + 50 * t3) + 246 * cos(5.69 - 1114.6286 * t - 3.7 * t2 - 44 * t3) + 205 * cos(1.02 + 14914.4523 * t - 1 * t2 + 6 * t3) + 171 * cos(3.33 + 23871.4457 * t + 1 * t2 + 31 * t3) + 152 * cos(4.94 + 6585.761 * t - 2 * t2 - 19 * t3) + 130 * cos(0.74 - 7700.389 * t - 2 * t2 - 25 * t3) + 109 * cos(5.20 + 7771.377 * t) + 105 * cos(2.31 + 8956.993 * t + 1 * t2 + 25 * t3) + 80 * cos(5.38 - 8538.241 * t + 2.8 * t2 + 26 * t3) + 49 * cos(6.24 + 628.302 * t) + 35 * cos(2.7 + 22756.817 * t - 3 * t2 - 13 * t3) + 31 * cos(4.1 + 16171.056 * t - 1 * t2 + 6 * t3) + 24 * cos(1.7 + 7842.365 * t - 2 * t2 - 19 * t3) + 23 * cos(3.9 + 24986.074 * t + 5 * t2 + 75 * t3) + 22 * cos(0.4 + 14428.126 * t - 4 * t2 - 38 * t3) + 17 * cos(2.0 + 8399.679 * t);
+	mR = 385001 + 20905 * cosl(5.4971 + 8328.691425 * t + 1.52 * t2 + 25 * t3) + 3699 * cosl(4.900 + 7214.06287 * t - 2.18 * t2 - 19 * t3) + 2956 * cosl(0.972 + 15542.75429 * t - 0.66 * t2 + 6 * t3) + 570 * cosl(1.57 + 16657.3828 * t + 3.0 * t2 + 50 * t3) + 246 * cosl(5.69 - 1114.6286 * t - 3.7 * t2 - 44 * t3) + 205 * cosl(1.02 + 14914.4523 * t - 1 * t2 + 6 * t3) + 171 * cosl(3.33 + 23871.4457 * t + 1 * t2 + 31 * t3) + 152 * cosl(4.94 + 6585.761 * t - 2 * t2 - 19 * t3) + 130 * cosl(0.74 - 7700.389 * t - 2 * t2 - 25 * t3) + 109 * cosl(5.20 + 7771.377 * t) + 105 * cosl(2.31 + 8956.993 * t + 1 * t2 + 25 * t3) + 80 * cosl(5.38 - 8538.241 * t + 2.8 * t2 + 26 * t3) + 49 * cosl(6.24 + 628.302 * t) + 35 * cosl(2.7 + 22756.817 * t - 3 * t2 - 13 * t3) + 31 * cosl(4.1 + 16171.056 * t - 1 * t2 + 6 * t3) + 24 * cosl(1.7 + 7842.365 * t - 2 * t2 - 19 * t3) + 23 * cosl(3.9 + 24986.074 * t + 5 * t2 + 75 * t3) + 22 * cosl(0.4 + 14428.126 * t - 4 * t2 - 38 * t3) + 17 * cosl(2.0 + 8399.679 * t);
 	mR /= 6378.1366;
 
 	t = jd / 365250, t2 = t * t, t3 = t2 * t;
 	// 误0.0002AU
 	sR = 10001399 // 日地距离
-		 + 167070 * cos(3.098464 + 6283.07585 * t) + 1396 * cos(3.0552 + 12566.1517 * t) + 10302 * cos(1.10749 + 6283.07585 * t) * t + 172 * cos(1.064 + 12566.152 * t) * t + 436 * cos(5.785 + 6283.076 * t) * t2 + 14 * cos(4.27 + 6283.08 * t) * t3;
+		 + 167070 * cosl(3.098464 + 6283.07585 * t) + 1396 * cosl(3.0552 + 12566.1517 * t) + 10302 * cosl(1.10749 + 6283.07585 * t) * t + 172 * cosl(1.064 + 12566.152 * t) * t + 436 * cosl(5.785 + 6283.076 * t) * t2 + 14 * cosl(4.27 + 6283.08 * t) * t3;
 	sR *= 1.49597870691 / 6378.1366 * 10;
 
 	// 经纬速度
 	t = jd / 36525.0;
 	vL = 7771 // 月日黄经差速度
-		 - 914 * sin(0.785 + 8328.6914 * t) - 179 * sin(2.543 + 15542.7543 * t) - 160 * sin(0.187 + 7214.0629 * t);
-	vB = -755 * sin(0.057 + 8433.4662 * t) // 月亮黄纬速度
-		 - 82 * sin(2.413 + 16762.1576 * t);
-	vR = -27299 * sin(5.497 + 8328.691425 * t) - 4184 * sin(4.900 + 7214.06287 * t) - 7204 * sin(0.972 + 15542.75429 * t);
+		 - 914 * sinl(0.785 + 8328.6914 * t) - 179 * sinl(2.543 + 15542.7543 * t) - 160 * sinl(0.187 + 7214.0629 * t);
+	vB = -755 * sinl(0.057 + 8433.4662 * t) // 月亮黄纬速度
+		 - 82 * sinl(2.413 + 16762.1576 * t);
+	vR = -27299 * sinl(5.497 + 8328.691425 * t) - 4184 * sinl(4.900 + 7214.06287 * t) - 7204 * sinl(0.972 + 15542.75429 * t);
 	vL /= 36525, vB /= 36525, vR /= 36525; // 每日速度
 
-	long double gm = mR * sin(mB) * vL / sqrt(vB * vB + vL * vL), smR = sR - mR; // gm伽马值,smR日月距
+	long double gm = mR * sinl(mB) * vL / sqrtl(vB * vB + vL * vL), smR = sR - mR; // gm伽马值,smR日月距
 	long double mk = 0.2725076, sk = 109.1222;
 	long double f1 = (sk + mk) / smR, r1 = mk + f1 * mR; // tanf1半影锥角, r1半影半径
 	long double f2 = (sk - mk) / smR, r2 = mk - f2 * mR; // tanf2本影锥角, r2本影半径
-	long double b = 0.9972, Agm = fabs(gm), Ar2 = fabs(r2);
-	long double fh2 = mR - mk / f2, h = Agm < 1 ? sqrt(1 - gm * gm) : 0; // fh2本影顶点的z坐标
+	long double b = 0.9972, Agm = fabsl(gm), Ar2 = fabsl(r2);
+	long double fh2 = mR - mk / f2, h = Agm < 1 ? sqrtl(1 - gm * gm) : 0; // fh2本影顶点的z坐标
 	long double ls1, ls2, ls3, ls4;
 
 	if (fh2 < h)
@@ -1668,22 +1668,22 @@ _ECFAST ecFast(long double jd)
 	}
 
 	ls1 = Agm - (b + r1);
-	if (fabs(ls1) < 0.016)
+	if (fabsl(ls1) < 0.016)
 	{
 		re.ac = 0; // 无食分界
 	}
 	ls2 = Agm - (b + Ar2);
-	if (fabs(ls2) < 0.016)
+	if (fabsl(ls2) < 0.016)
 	{
 		re.ac = 0; // 偏食分界
 	}
 	ls3 = Agm - (b);
-	if (fabs(ls3) < 0.016)
+	if (fabsl(ls3) < 0.016)
 	{
 		re.ac = 0; // 无中心食分界
 	}
 	ls4 = Agm - (b - Ar2);
-	if (fabs(ls4) < 0.016)
+	if (fabsl(ls4) < 0.016)
 	{
 		re.ac = 0; // 有中心食分界(但本影未全部进入)
 	}
@@ -1706,11 +1706,11 @@ _ECFAST ecFast(long double jd)
 	}
 	else
 	{ // 本影全进入
-		if (fabs(fh2 - h) < 0.019)
+		if (fabsl(fh2 - h) < 0.019)
 		{
 			re.ac = 0;
 		}
-		if (fabs(fh2) < h)
+		if (fabsl(fh2) < h)
 		{
 			long double dr = vR * h / vL / mR;
 			long double H1 = mR - dr - mk / f2; // 入点影锥z坐标
@@ -1727,11 +1727,11 @@ _ECFAST ecFast(long double jd)
 			{
 				re.lx = "H"; // 环全环
 			}
-			if (fabs(H1) < 0.019)
+			if (fabsl(H1) < 0.019)
 			{
 				re.ac = 0;
 			}
-			if (fabs(H2) < 0.019)
+			if (fabsl(H2) < 0.019)
 			{
 				re.ac = 0;
 			}
@@ -1748,12 +1748,12 @@ long double moonIll(long double t)
 	D = (297.8502042 + 445267.1115168 * t - 0.0016300 * t2 + t3 / 545868 - t4 / 113065000) * dm; // 日月平距角
 	M = (357.5291092 + 35999.0502909 * t - 0.0001536 * t2 + t3 / 24490000) * dm;				 // 太阳平近点
 	m = (134.9634114 + 477198.8676313 * t + 0.0089970 * t2 + t3 / 69699 - t4 / 14712000) * dm;	 // 月亮平近点
-	a = PI - D + (-6.289 * sin(m) + 2.100 * sin(M) - 1.274 * sin(D * 2 - m) - 0.658 * sin(D * 2) - 0.214 * sin(m * 2) - 0.110 * sin(D)) * dm;
-	return (1 + cos(a)) / 2;
+	a = PI - D + (-6.289 * sinl(m) + 2.100 * sinl(M) - 1.274 * sinl(D * 2 - m) - 0.658 * sinl(D * 2) - 0.214 * sinl(m * 2) - 0.110 * sinl(D)) * dm;
+	return (1 + cosl(a)) / 2;
 }
 
 long double moonRad(long double r, long double h)
 {
 	// 转入地平纬度及地月质心距离,返回站心视半径(角秒)
-	return cs_sMoon / r * (1 + sin(h) * cs_rEar / r);
+	return cs_sMoon / r * (1 + sinl(h) * cs_rEar / r);
 }

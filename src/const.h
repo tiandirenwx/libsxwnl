@@ -17,7 +17,7 @@
 //sin(太阳视差)
 #define  cs_sinP (cs_rEar / cs_AU)  
 //太阳视差
-#define  cs_PI ( Math.asin(cs_sinP))
+#define  cs_PI ( asinl(cs_sinP))
 //光速(行米/秒)
 #define  cs_GS ( 299792.458) 
 //每天文单位的光行时间(儒略世纪)
@@ -41,7 +41,7 @@
 
 //转整型
 //#define int2(v) ((v)>=0?(int)(v):((int)(v)-1))
-#define int2(v) ((int)floor(v))
+#define int2(v) (static_cast<int>(std::floor(v)))
 
 #define int64(v) (static_cast<int64_t>(std::floor(v)))
 

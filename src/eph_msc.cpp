@@ -115,7 +115,7 @@ void EphMSC::calc(long double T, long double L,long double fa,long double high)
     //时差计算
     long double t = T / 10, t2 = t * t, t3 = t2 * t, t4 = t3 * t, t5 = t4 * t;
     long double Lon = (1753470142 + 6283319653318 * t + 529674 * t2 + 432 * t3 - 1124 * t4 - 9 * t5) / 1000000000 + PI - 20.5 / rad;	//修正了光行差的太阳平黄经
-    Lon = rad2mrad(Lon - (pstMscData->sCJ - pstMscData->dL * cos(pstMscData->E)));	//(修正了光行差的平黄经)-(不含dL*cos(E)的视赤经)
+    Lon = rad2mrad(Lon - (pstMscData->sCJ - pstMscData->dL * cosl(pstMscData->E)));	//(修正了光行差的平黄经)-(不含dL*cos(E)的视赤经)
     if (Lon > PI)
     {
         Lon -= pi2;				//得到时差,单位是弧度

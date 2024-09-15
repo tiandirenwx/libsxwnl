@@ -89,8 +89,10 @@ int main(int argc, char *argv[])
         {
             // 2008-08-01 10:18:21 TD
             //  日月食
+            GeoPostion &gep = GeoPostion::getInstance();
+            JINGWEI jw = gep.getCityGeoPos();
             Time t = {2008, 8, 1, 18, 17, 15.0};
-            std::cout << rysCalc(t, true, false) << std::endl;
+            std::cout << rysCalc(t, true, false,jw) << std::endl;
             std::cout << rs_search(2008, 8, 200, 1) << std::endl; // 日食粗搜索
             std::cout << rs2_calc(5, 0, 29.5306) << std::endl;
             std::cout << rs2_jxb() << std::endl;
@@ -143,7 +145,6 @@ int main(int argc, char *argv[])
             std::cout << s << std::endl;
             return 0;
         }
-
         else
         {
             lunarYearTest(std::stoi(argv[1]), 1);
@@ -160,8 +161,17 @@ int main(int argc, char *argv[])
 
     if (4 == argc)
     {
-        auto y = std::stoi(argv[1]), m = std::stoi(argv[2]), d = std::stoi(argv[3]);
-        lunar2solarSingleTest(y, m, d);
+        if("jq" == std::string(argv[1]))
+        {
+            auto year = std::stoi(argv[2]),month = std::stoi(argv[3]);
+            jqCalc(year,month);
+        }
+        else
+        {
+            auto y = std::stoi(argv[1]), m = std::stoi(argv[2]), d = std::stoi(argv[3]);
+            lunar2solarSingleTest(y, m, d);
+        }
+
         return 0;
     }
 

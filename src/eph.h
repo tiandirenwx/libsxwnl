@@ -247,7 +247,7 @@ inline long double so_accurate(long double W)
 inline long double qi_accurate2(long double jd, bool astFlag = false, long double longitude = 120.0)
 {
 	long double d = PI / 12.0;
-	long double w = floor((jd + 293) / 365.2422 * 24) * d;
+	long double w = std::floor((jd + 293.0) / 365.2422 * 24) * d;
 
 	long double a = qi_accurate(w, astFlag, longitude);
 	if ((a - jd) > 5)
@@ -267,5 +267,5 @@ inline long double qi_accurate2(long double jd, bool astFlag = false, long doubl
 // 精朔
 inline long double so_accurate2(long double jd)
 {
-	return so_accurate(floor((jd + 8) / 29.5306) * PI * 2);
+	return so_accurate(std::floor((jd + 8.0) / 29.5306) * PI * 2);
 }

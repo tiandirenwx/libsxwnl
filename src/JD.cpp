@@ -49,7 +49,7 @@ Time JD::JD2DD(long double jd)
 {
     Time r;
     int D = int2(jd + 0.5);
-    double F = jd + 0.5 - D, c; // 取得日数的整数部份A及小数部分F
+    long double F = jd + 0.5 - D, c; // 取得日数的整数部份A及小数部分F
     // 1582-10-15,[明]神宗 朱翊钧 万历10年 农历壬午年【马年】九月十九，甲戌日, 格里高利日
     if (D >= 2299161)
     {
@@ -213,7 +213,7 @@ Time JD::getNowTime()
 {
     struct tm *bjs;
     time_t time0;
-    time0 = time(NULL);
+    time0 = time(nullptr);
     bjs = localtime(&time0);
     Time t =
         {
@@ -247,7 +247,7 @@ double JD::calcAST(long double jd, long double lon)
 
 double mod(double x, double y)
 {
-    return x - y * floor(x / y);
+    return x - y * std::floor(x / y);
 }
 
 std::tuple<double, double> JD::gcal2jd(int year, int month, int day)
