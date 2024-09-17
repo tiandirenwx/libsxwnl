@@ -21,7 +21,7 @@ std::string rysCalc(Time &d, bool is_utc, bool nasa_r,const JINGWEI &jw)
 	EphMSC msc;
 	msc.calc(jd, vJ, vW, 0);
 	S_EPH_MSC_DATA &sMscData = msc.getData();
-	std::string s = "", s2;
+	std::string s, s2;
 	long double J1, W1, J2, W2;
 	long double sr, mr, er, Er, d0, d1, d2;
 	long double msHJ = rad2mrad(sMscData.mHJ - sMscData.sHJ);
@@ -88,6 +88,7 @@ std::string rysCalc(Time &d, bool is_utc, bool nasa_r,const JINGWEI &jw)
 				jd -= -8 / 24.0 + dt_T(jd), td = " UTC"; // 转为UTC(本地时间)
 			}
 			s += mc[i] + ":" + JD::JD2str(jd + J2000) + td + "\n";
+
 		}
 		s += "时长: " + m2fm(rsplMaxStruct.dur * 86400, 1, 1) + "\n";
 		s += "食分: " + toFixed(rsplMaxStruct.sf, 5) + "\n";
@@ -141,7 +142,7 @@ std::string rs_search(int Y, int M, int n, bool fs)
 	// 查找日食
 	int i, k;
 	_ECFAST r;
-	std::string s = "", s2 = "";
+	std::string s , s2 ;
 	Time t{};
 	t.Y = Y;
 	t.M = M;
@@ -345,7 +346,6 @@ std::string shengjiang2(int y,const JINGWEI &jw)
 		t = sunShengJ(jd + i, L, fa, 1) + J2000 + 8 / 24.0;
 		s2 += JD::timeStr(t) + "\n";
 	}
-	// std::cout<<;
 	return std::to_string(y) + "年太阳年度升降表\n        升               降\n" + s + s2;
 }
 

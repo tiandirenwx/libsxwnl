@@ -170,7 +170,7 @@ std::string EphMSC::toString(bool flag)
     s = s + "方位角 " + rad2str(pstMscData->mPJ, 0) + "  " + rad2str(pstMscData->sPJ, 0) + "\n";
     s = s + "高度角 " + rad2str(pstMscData->mPW, 0) + "  " + rad2str(pstMscData->sPW, 0) + "\n";
     s = s + "时角   " + rad2str(pstMscData->mShiJ, 0) + "  " + rad2str(pstMscData->sShiJ, 0) + "\n";
-    s = s + "视半径   " + m2fm(pstMscData->mRad, 2, 0) + "       " + m2fm(pstMscData->sRad, 2, 0) + " (观测点)\n";
+    s = s + "视半径(观测点)  " + m2fm(pstMscData->mRad, 2, 0) + "       " + m2fm(pstMscData->sRad, 2, 0) + "\n";
 
     if (flag)
     {

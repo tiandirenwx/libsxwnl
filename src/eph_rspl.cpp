@@ -1,5 +1,6 @@
 #include "eph_rspl.h"
 #include "eph_rsgs.h"
+#include <iostream>
 
 EphRspl::EphRspl()
 {
@@ -129,21 +130,21 @@ void EphRspl::secMax(long double jd, long double L, long double fa, long double 
             pstSeMax->sf3 = 0;
         }
 
-        pstSeMax->sT[0] = lineT(G, v, u, G.mr + G.sr, 0); // 初亏
+        pstSeMax->sT[0] = lineT(G, v, u, G.mr + G.sr, false); // 初亏
         for (i = 0; i < 3; i++)
         { // 初亏再算3次
             secXY(pstSeMax->sT[0], L, fa, high, g);
-            pstSeMax->sT[0] = lineT(g, v, u, g.mr + g.sr, 0);
+            pstSeMax->sT[0] = lineT(g, v, u, g.mr + g.sr, false);
         }
 
         pstSeMax->P1 = rad2mrad(atan2l(g.x, g.y));                                                     // 初亏位置角
         pstSeMax->V1 = rad2mrad(pstSeMax->P1 - shiChaJ(pGST2(pstSeMax->sT[0]), L, fa, g.sCJ, g.sCW)); // 这里g.sCJ与g.sCW对应的时间与sT[0]还差了一点，所以有一小点误差，不采用真恒星时也误差一点
 
-        pstSeMax->sT[2] = lineT(G, v, u, G.mr + G.sr, 1); // 复圆
+        pstSeMax->sT[2] = lineT(G, v, u, G.mr + G.sr, true); // 复圆
         for (i = 0; i < 3; i++)
         { // 复圆再算3次
             secXY(pstSeMax->sT[2], L, fa, high, g);
-            pstSeMax->sT[2] = lineT(g, v, u, g.mr + g.sr, 1);
+            pstSeMax->sT[2] = lineT(g, v, u, g.mr + g.sr, true);
         }
         pstSeMax->P2 = rad2mrad(atan2l(g.x, g.y));
         pstSeMax->V2 = rad2mrad(pstSeMax->P2 - shiChaJ(pGST2(pstSeMax->sT[2]), L, fa, g.sCJ, g.sCW)); // 这里g.sCJ与g.sCW对应的时间与sT[2]还差了一点，所以有一小点误差，不采用真恒星时也误差一点
@@ -151,25 +152,25 @@ void EphRspl::secMax(long double jd, long double L, long double fa, long double 
     if (rmin <= G.mr - G.sr)
     { // 全食计算
         pstSeMax->LX = "全";
-        pstSeMax->sT[3] = lineT(G, v, u, G.mr - G.sr, 0); // 食既
+        pstSeMax->sT[3] = lineT(G, v, u, G.mr - G.sr, false); // 食既
         secXY(pstSeMax->sT[3], L, fa, high, g);
-        pstSeMax->sT[3] = lineT(g, v, u, g.mr - g.sr, 0); // 食既再算1次
+        pstSeMax->sT[3] = lineT(g, v, u, g.mr - g.sr, false); // 食既再算1次
 
-        pstSeMax->sT[4] = lineT(G, v, u, G.mr - G.sr, 1); // 生光
+        pstSeMax->sT[4] = lineT(G, v, u, G.mr - G.sr, true); // 生光
         secXY(pstSeMax->sT[4], L, fa, high, g);
-        pstSeMax->sT[4] = lineT(g, v, u, g.mr - g.sr, 1); // 生光再算1次
+        pstSeMax->sT[4] = lineT(g, v, u, g.mr - g.sr, true); // 生光再算1次
         pstSeMax->dur = pstSeMax->sT[4] - pstSeMax->sT[3];
     }
     if (rmin <= G.sr - G.mr)
     { // 环食计算
         pstSeMax->LX = "环";
-        pstSeMax->sT[3] = lineT(G, v, u, G.sr - G.mr, 0); // 食既
+        pstSeMax->sT[3] = lineT(G, v, u, G.sr - G.mr, false); // 食既
         secXY(pstSeMax->sT[3], L, fa, high, g);
-        pstSeMax->sT[3] = lineT(g, v, u, g.sr - g.mr, 0); // 食既再算1次
+        pstSeMax->sT[3] = lineT(g, v, u, g.sr - g.mr, false); // 食既再算1次
 
-        pstSeMax->sT[4] = lineT(G, v, u, G.sr - G.mr, 1); // 生光
+        pstSeMax->sT[4] = lineT(G, v, u, G.sr - G.mr, true); // 生光
         secXY(pstSeMax->sT[4], L, fa, high, g);
-        pstSeMax->sT[4] = lineT(g, v, u, g.sr - g.mr, 1); // 生光再算1次
+        pstSeMax->sT[4] = lineT(g, v, u, g.sr - g.mr, true); // 生光再算1次
         pstSeMax->dur = pstSeMax->sT[4] - pstSeMax->sT[3];
     }
 
@@ -187,6 +188,7 @@ void EphRspl::secMax(long double jd, long double L, long double fa, long double 
         if (pstSeMax->sT[i] < pstSeMax->sun_s || pstSeMax->sT[i] > pstSeMax->sun_j)
         {
             pstSeMax->sT[i] = 0; // 升降时间之外的日食算值无效，因为地球不是透明的
+            //std::cout<< "st value: "<<i<<std::endl;
         }
     }
 
@@ -216,25 +218,25 @@ void EphRspl::nbj(long double jd)
     G.J = G.W = 0;
     for (i = 0; i < 2; i++)
     {
-        p2p(G.J, G.W, G, 1, 1);
+        p2p(G.J, G.W, G, true, 1);
     }
     V[2] = G.J, V[3] = G.W; // 本影北界,环食为南界(本影区之内,变差u,v基本不变,所以计算两次足够)
     G.J = G.W = 0;
     for (i = 0; i < 2; i++)
     {
-        p2p(G.J, G.W, G, 1, -1);
+        p2p(G.J, G.W, G, true, -1);
     }
     V[4] = G.J, V[5] = G.W; // 本影南界,环食为北界
     G.J = G.W = 0;
     for (i = 0; i < 3; i++)
     {
-        p2p(G.J, G.W, G, 0, -1);
+        p2p(G.J, G.W, G, false, -1);
     }
     V[6] = G.J, V[7] = G.W; // 半影北界
     G.J = G.W = 0;
     for (i = 0; i < 3; i++)
     {
-        p2p(G.J, G.W, G, 0, 1);
+        p2p(G.J, G.W, G, false, 1);
     }
     V[8] = G.J, V[9] = G.W; // 半影南界
 

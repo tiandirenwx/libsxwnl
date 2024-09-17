@@ -106,7 +106,7 @@ void EphRsgs::init(long double jd, int n)
     pstPara->setSrad(cs_k0 / ((a[2] + a[p + 2]) / 2.0 / cs_rEar));
     pstPara->setBba(sinl((a[1] + a[p + 1]) / 2.0));
     pstPara->setBba(cs_ba * (1 + (1 - cs_ba2) * pstPara->getBba() * pstPara->getBba() / 2.0));
-    pstPara->setBhc(-atan(tanl(E) * sinl((a[6] + a[p + 6]) / 2.0))); // 黄交线与赤交线的夹角
+    pstPara->setBhc(-atanl(tanl(E) * sinl((a[6] + a[p + 6]) / 2.0))); // 黄交线与赤交线的夹角
 }
 
 Vector3 EphRsgs::chazhi(long double jd, int xt)
@@ -433,7 +433,7 @@ Vector4 EphRsgs::nanbei(Vector3 M, long double vx0, long double vy0, long double
             z = 0;
             js++;
         } // z小于0则置0，如果两次小于0，可能不收敛造成的，故不再迭代了
-        z = sqrt(z);
+        z = sqrtl(z);
         x -= (x - M[0]) * z / M[2];
         y -= (y - M[1]) * z / M[2];
         vx = vx0 - pi2 * (sinl(I[1]) * z - cosl(I[1]) * y);
@@ -451,6 +451,7 @@ bool EphRsgs::mDian(Vector3 M, long double vx0, long double vy0, bool AB, long d
 { // 日出日没食甚
     long double R;
     NODE p;
+
     Vector3 a = M;
     _VXY c = {};
     for (int i = 0; i < 2; i++)
@@ -490,7 +491,7 @@ std::string EphRsgs::jieX3(long double jd)
 
     long double t = int64(re.jd * 1440) / 1440.0 - 3 / 24.0;
     long double N = 360, dt = 1 / 1440.0;
-    std::string s = "", s2;
+    std::string s , s2;
 
     for (i = 0; i < N; i++, t += dt)
     {
