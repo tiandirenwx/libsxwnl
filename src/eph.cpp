@@ -700,7 +700,7 @@ Vector3 e_coord(long double t, int n1, int n2, int n3)
 long double XL1_calc(int zn, long double t, int n)
 {
 	const long double *const *ob = XL1[zn];
-	long double F, N, v = 0, tn = 1, c = 0;
+	long double N, v = 0, tn = 1, c = 0;
 	long double t2 = t * t, t3 = t2 * t, t4 = t3 * t, t5 = t4 * t, tx = t - 10;
 	if (zn == 0)
 	{
