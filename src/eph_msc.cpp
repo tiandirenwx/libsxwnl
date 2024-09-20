@@ -26,7 +26,7 @@ void EphMSC::calc(long double T, long double L,long double fa,long double high)
     pstMscData->dL = zd[0];			//黄经章
     pstMscData->dE = zd[1];			//交角章动
     pstMscData->E = hcjj(T) + pstMscData->dE;	//真黄赤交角
-    pstMscData->gst = pGST(pstMscData->jd, pstMscData->dt) + pstMscData->dL * cos(pstMscData->E);	//真恒星时(不考虑非多项式部分)
+    pstMscData->gst = pGST(pstMscData->jd, pstMscData->dt) + pstMscData->dL * cosl(pstMscData->E);	//真恒星时(不考虑非多项式部分)
     Vector3 z;
 
     //=======月亮========

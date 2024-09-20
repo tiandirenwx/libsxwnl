@@ -43,7 +43,7 @@ namespace sxtwl
 	//获取一月中的阴日数量 
 	uint8_t getLunarMonthNum(int By, uint8_t month, bool isRun = false,bool isSpec = false);
 	//儒略日数转公历
-	Time JD2DD(double jd);
+	Time JD2DD(long double jd);
 	//公历转儒略日
-	double toJD(Time& time);
+	long double toJD(Time& time);
 };

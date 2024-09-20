@@ -8,7 +8,7 @@ namespace sxtwl
 };
 
 
-Day::Day(int d,double jf)
+Day::Day(int d,long double jf)
 {
     this->d0 = d;
     this->jdF = jf;
@@ -235,7 +235,7 @@ Day *Day::before(int day)
     return new Day(this->d0 - day);
 }
 
-double Day::getJulianDate()
+long double Day::getJulianDate()
 {
     return this->d0 + this->jdF + J2000;
 }
@@ -476,7 +476,7 @@ uint8_t Day::getYueXiang()
     return this->yx_idx_;
 }
 
-double Day::getYueXiangJD()
+long double Day::getYueXiangJD()
 {
     if (this->yxjd_ != 0)
     {
@@ -508,7 +508,7 @@ double Day::getYueXiangJD()
         if (D == this->d0)
         {
             this->yxjd_ = d;
-            this->yx_idx_ = xn;
+            this->yx_idx_ = int8_t(xn);
             break;
         }
     } while (D + 5 < this->bd0 + this->bdn);
@@ -527,7 +527,7 @@ uint8_t Day::getJieQi()
     return this->jieling_;
 }
 
-double Day::getJieQiJD()
+long double Day::getJieQiJD()
 {
     if (this->jieqi_jd_ != 0)
     {
@@ -560,7 +560,7 @@ double Day::getJieQiJD()
         if (D == this->d0)
         {
             this->jieqi_jd_ = d;
-            this->jieling_ = xn;
+            this->jieling_ = int8_t (xn);
             break;
         }
     } while (D + 12 < this->bd0 + this->bdn);
@@ -610,7 +610,7 @@ Day *Day::fromDate(const Time &t)
     return new Day(d,jd - d);
 }
 
-Day *Day::fromJulianDay(double jd)
+Day *Day::fromJulianDay(long double jd)
 {
     auto t = JD::JD2DD(jd);
     t.h = 12,t.m = 0, t.s = 0.1;

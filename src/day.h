@@ -23,7 +23,7 @@ class Day
 {
 private:
     int d0; //儒略日整数，对应12点
-    double jdF;  //儒略日小数部分
+    long double jdF;  //儒略日小数部分
     int bd0;   //公历月首,中午
     int bdn;   //本月天数(公历)
 
@@ -56,7 +56,7 @@ private:
     uint8_t weekn_;     //本月的总周数
 
     int8_t yx_idx_;    // 月相索引
-    double yxjd_;   	// 月相时刻(儒略日)
+    long double yxjd_;   	// 月相时刻(儒略日)
    
     int8_t jieling_;    //节令值
     uint8_t xingzuo_;   //星座
@@ -71,7 +71,7 @@ private:
     GZ *gz_day_;   // 日天干地支
 
 private:
-    explicit Day(int d,double jf = 0);
+    explicit Day(int d,long double jf = 0);
     void checkSSQ();
     void checkLunarData();
     void checkSolarData();
@@ -87,7 +87,7 @@ public:
     Day *after(int day);
     Day *before(int day);
     
-    double getJulianDate();
+    long double getJulianDate();
     // 获取阴历日期
     int getLunarDay();
     //获取阴历月
@@ -124,13 +124,13 @@ public:
     //查找月相
     bool hasYueXiang();
     uint8_t getYueXiang();
-    double getYueXiangJD();
+    long double getYueXiangJD();
 
     //是否有节气
     bool hasJieQi();
     // 获取节气
     uint8_t getJieQi() ;
-    double getJieQiJD();
+    long double getJieQiJD();
     // 获取星座
     uint8_t  getConstellation();
 
@@ -138,7 +138,7 @@ public:
 public:
     static Day *fromDate(const Time &t);
 
-    static Day *fromJulianDay(double jd);
+    static Day *fromJulianDay(long double jd);
     
     static Day *fromSolar(int _year, uint8_t _month, int _day);
     

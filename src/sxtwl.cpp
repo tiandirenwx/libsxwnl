@@ -651,13 +651,13 @@ namespace sxtwl
 	}
 
 	// 儒略日数转公历
-	Time JD2DD(double jd)
+	Time JD2DD(long double jd)
 	{
 		return JD::JD2DD(jd);
 	}
 
 	// 公历转儒略日
-	double toJD(Time &time)
+	long double toJD(Time &time)
 	{
 		return JD::toJD(time);
 	}

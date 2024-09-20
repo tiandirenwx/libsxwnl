@@ -23,11 +23,11 @@
 格里高利历的历年平均长度为365日5时49分12秒，比回归年长26秒
  */
 // 公历转儒略日
-double JD::DD2JD(int y, uint8_t m, double d)
+long double JD::DD2JD(int y, uint8_t m, long double d)
 {
     int n = 0, G = 0;
     // 判断是否为格里高利历日1582*372+10*31+15
-    if (y * 372 + m * 31 + (int)(d) >= 588829)
+    if (y * 372 + m * 31 + static_cast<int64_t>(d) >= 588829)
     {
         G = 1;
     }
@@ -88,7 +88,7 @@ Time JD::JD2DD(long double jd)
     return r;
 }
 
-double JD::toJD(const Time &time)
+long double JD::toJD(const Time &time)
 {
     return JD::DD2JD(time.Y, time.M, time.D + ((time.s / 60 + time.m) / 60 + time.h) / 24);
 }
@@ -104,7 +104,7 @@ std::string JD::timeStr(long double jd)
     s -= h * 3600;
     m = int2(s / 60);
     s -= m * 60;
-    std::string ret = "";
+    std::string ret;
     char buff[11];
     memset(buff, 0, 11);
     snprintf(buff, 11, "0%d", h);
@@ -199,7 +199,10 @@ std::string JD::formatStr(long double jd)
         sMeridiem = "晚上";
     }
 
-    std::string res = std::to_string(Y) + "年" + std::to_string(M) + "月" + std::to_string(D) + "日" + sMeridiem + std::to_string(int(h)) + "点" + std::to_string(int(m)) + "分" + std::to_string(int(s)) + "秒";
+    std::string res = std::to_string(Y) + "年" + std::to_string(M) + "月" + std::to_string(D) + "日" +
+            sMeridiem + std::to_string(int(h)) + "点" +
+            std::to_string(int(m)) + "分" +
+            std::to_string(int(s)) + "秒";
     return res;
 }
 
@@ -227,7 +230,7 @@ Time JD::getNowTime()
 }
 
 // 计算真太阳时
-std::tuple<double, Time, std::string> JD::calcAST(Time &dt, long double lon)
+std::tuple<long double, Time, std::string> JD::calcAST(Time &dt, long double lon)
 {
     auto utcJd = toJD(dt) - 8.0 / 24.0;              // utc时间
     auto tdJd = dt_T(utcJd - J2000) + utcJd - J2000; // 力学时
@@ -237,7 +240,7 @@ std::tuple<double, Time, std::string> JD::calcAST(Time &dt, long double lon)
     return std::make_tuple(utcJd, dtAst, zty);
 }
 
-double JD::calcAST(long double jd, long double lon)
+long double JD::calcAST(long double jd, long double lon)
 {
     auto utcJd = jd - 8.0 / 24.0;                    // utc时间
     auto tdJd = dt_T(utcJd - J2000) + utcJd - J2000; // 力学时

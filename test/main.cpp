@@ -93,7 +93,7 @@ int main(int argc, char *argv[])
             JINGWEI jw = gep.getCityGeoPos();
             Time t = {2008, 8, 1, 18, 17, 15.0};
             std::cout << rysCalc(t, true, false,jw) << std::endl;
-            std::cout << rs_search(2008, 8, 200, 1) << std::endl; // 日食粗搜索
+            std::cout << rs_search(2008, 8, 200, true) << std::endl; // 日食粗搜索
             std::cout << rs2_calc(5, 0, 29.5306) << std::endl;
             std::cout << rs2_jxb() << std::endl;
             return 0;
@@ -211,10 +211,10 @@ int main(int argc, char *argv[])
         SBaziInputPara sBZ;
         sBZ.birthDayTime = birthTime;
         sBZ.calendar = CalendarLunar;
-        sBZ.gender = (std::stoi(argv[2]) == 1) ? true : false;
+        sBZ.gender = (std::stoi(argv[2]) == 1);
         sBZ.isAst = true;
-        sBZ.isRun = (std::stoi(argv[3]) == 1) ? true : false;
-        sBZ.isSpec = (std::stoi(argv[4]) == 1) ? true : false;
+        sBZ.isRun = (std::stoi(argv[3]) == 1);
+        sBZ.isSpec = (std::stoi(argv[4]) == 1);
         sBZ.jw = jw;
         sBZ.lifa = YuWuWeiZiPingLifa_DingDongZhi;
         sBZ.name = "无名";

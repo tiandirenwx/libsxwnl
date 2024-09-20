@@ -48,7 +48,7 @@ std::string LunarYear::getNianLiStr()
 {
     // 字符串年历生成
     int i, j, y = year_;
-    std::string s = "", s1, s2;
+    std::string s, s1, s2;
     long double v, qi;
 
     SSQ &ssq = SSQ::getInstance();

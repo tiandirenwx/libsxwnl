@@ -87,17 +87,17 @@ class JD
 {
 public:
 	// 公历转儒略日
-	static double DD2JD(int y, uint8_t m, double d);
+	static long double DD2JD(int y, uint8_t m, long double d);
 	static Time JD2DD(long double jd);
 
-	static double toJD(const Time &time);
+	static long double toJD(const Time &time);
 	static std::string timeStr(long double jd);
 	static std::string timeStr(const Time &t);
 	static std::string formatStr(long double jd);
 	static std::string JD2str(long double jd);
 	static Time getNowTime();
-	static std::tuple<double, Time,std::string> calcAST(Time &dt,long double lon);
-	static double calcAST(long double jd, long double lon);
+	static std::tuple<long double, Time,std::string> calcAST(Time &dt,long double lon);
+	static long double calcAST(long double jd, long double lon);
     
 	static std::tuple<double, double> gcal2jd(int year, int month, int day);
 	static std::tuple<int, int, int, double> jd2gcal(double jd1, double jd2);
