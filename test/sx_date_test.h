@@ -382,3 +382,41 @@ void jqCalc(int year, int month)
         std::cout << year << "年" << month << "月节令是:" << Ljq << ",时间:" << JD::timeStr(jqt) << std::endl;
     }
 }
+
+void getJieQiList(int year)
+{
+    SSQ &ssq = SSQ::getInstance();
+    // 计算指定年份的节气信息，以该年年中为基准
+    int baseJD = int2((year - 2000.0) * 365.2422 + 180);
+    ssq.calcY(baseJD);
+    std::vector<long double> vecZQ = ssq.getZhongQi();
+    
+    std::cout << "=== " << year << "年节气列表 ===" << std::endl;
+    std::cout << std::endl;
+    
+    // vecZQ包含25个节气时刻（索引0-24），从上年冬至到次年冬至
+    // 我们需要筛选出属于指定年份的节气
+    int count = 0;
+    for (int i = 0; i < 25; i++)
+    {
+        // 计算精确的节气时刻
+        long double jd = qi_accurate2(vecZQ[i], false, 120) + J2000;
+        Time t = JD::JD2DD(jd);
+        int jqYear = t.Y;
+        
+        // 只显示属于指定年份的节气
+        if (jqYear == year)
+        {
+            count++;
+            // Jqmc数组只有24个元素（索引0-23），使用模运算确保索引正确
+            std::string jqName = Jqmc[i % 24];
+            std::string timeStr = JD::JD2str(jd);
+            
+            std::cout << std::setw(4) << count << ". " 
+                      << std::setw(6) << jqName << ": " 
+                      << timeStr << std::endl;
+        }
+    }
+    
+    std::cout << "\n共 " << count << " 个节气属于 " << year << " 年" << std::endl;
+}

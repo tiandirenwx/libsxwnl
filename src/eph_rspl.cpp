@@ -1,6 +1,5 @@
 #include "eph_rspl.h"
 #include "eph_rsgs.h"
-#include <iostream>
 
 EphRspl::EphRspl()
 {

@@ -153,6 +153,14 @@ int main(int argc, char *argv[])
         return 0;
     }
 
+    if (3 == argc && "jqlist" == std::string(argv[1]))
+    {
+        // 测试getJieQiList函数：通过输入年份计算全年节气列表
+        auto year = std::stoi(argv[2]);
+        getJieQiList(year);
+        return 0;
+    }
+
     if (3 == argc)
     {
         lunarYearTest(std::stoi(argv[1]), std::stoi(argv[2]));
@@ -205,18 +213,18 @@ int main(int argc, char *argv[])
     if (argc == 10 && "bz" == std::string(argv[1]))
     {
         Time birthTime = {std::stoi(argv[5]), std::stoi(argv[6]), std::stoi(argv[7]), std::stod(argv[8]), std::stod(argv[9]), 0};
-        GeoPostion &gep = GeoPostion::getInstance();
-        JINGWEI jw = gep.getCityGeoPos();
-        // JINGWEI jw={116+23/60.0, 39.9, "默认", "北京"};
+        // GeoPostion &gep = GeoPostion::getInstance();
+        // JINGWEI jw = gep.getCityGeoPos();
+        JINGWEI jw={120, 39.9, "默认", "北京"};
         SBaziInputPara sBZ;
         sBZ.birthDayTime = birthTime;
         sBZ.calendar = CalendarLunar;
         sBZ.gender = (std::stoi(argv[2]) == 1);
-        sBZ.isAst = true;
+        sBZ.isAst = false;
         sBZ.isRun = (std::stoi(argv[3]) == 1);
         sBZ.isSpec = (std::stoi(argv[4]) == 1);
         sBZ.jw = jw;
-        sBZ.lifa = YuWuWeiZiPingLifa_DingDongZhi;
+        sBZ.lifa = YuWuWeiZiPingLifa_DingXiaZhi;
         sBZ.name = "无名";
         BaziBase obj(sBZ);
         obj.calcBaziPaiPan();
@@ -281,8 +289,8 @@ int main(int argc, char *argv[])
     //     for (int j = 1; j <= 12; j++)
     //     {
     //         jqCalc(i, j);
-    //     }
-    // }
+    //
+    //
 
     return 0;
 }

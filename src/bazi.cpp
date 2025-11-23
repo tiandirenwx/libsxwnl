@@ -120,29 +120,49 @@ std::array<long double, 4> BaziBase::bkCalc(int year, int month, LiFaType lifa)
 		monthTemp = 6;
 	}
 
-    Time t1 = {yearTemp,monthTemp,21,12,0,0};
-	//auto jdt1 = JD::gcal2jd(yearTemp, monthTemp, 21);
-	//auto stjd = std::get<0>(jdt1) + std::get<1>(jdt1) + 0.5 - J2000;
-    double stjd = JD::toJD(t1) - J2000;
-	//auto jdt2 = JD::gcal2jd(yearTemp+1,monthTemp, 21);
-	//auto mdjd = std::get<0>(jdt2) + std::get<1>(jdt2) + 0.5 - J2000;
-    Time t2 = {yearTemp+1,monthTemp,21,12,0,0};
-    double mdjd = JD::toJD(t2) - J2000;
-	//auto jdt3 = JD::gcal2jd(yearTemp+2,monthTemp, 21);
-	//auto edjd = std::get<0>(jdt3) + std::get<1>(jdt3) + 0.5 - J2000;
-    Time t3 = {yearTemp+2,monthTemp, 21,12,0,0};
-    double edjd = JD::toJD(t3) - J2000;
-
-	//前一年中气
-	auto pzq = qi_accurate2(stjd, false, 120) + J2000;
-	auto zq = qi_accurate2(mdjd, false, 120) + J2000;
-	//下一年中气
-	auto nzq = qi_accurate2(edjd, false, 120) + J2000;
+	// 使用SSQ类精确计算中气
+	SSQ &ssq = SSQ::getInstance();
+	
+	long double pzq, zq, nzq;
+	
+	if (lifa == YuWuWeiZiPingLifa_DingXiaZhi)
+	{
+		// 定夏至：需要yearTemp年夏至、yearTemp+1年夏至、yearTemp+2年夏至
+		// 计算yearTemp+1年的节气数据，vecZQ[0]是yearTemp年夏至（前一年的夏至在索引0）
+		int baseJD1 = int2((yearTemp + 1 - 2000.0) * 365.2422 + 180);
+		ssq.calcY(baseJD1);
+		std::vector<long double> vecZQ1 = ssq.getZhongQi();
+		pzq = qi_accurate2(vecZQ1[0], false, 120) + J2000;  // yearTemp年夏至
+		zq = qi_accurate2(vecZQ1[24], false, 120) + J2000;  // yearTemp+1年夏至
+		
+		// 计算yearTemp+2年的节气数据，vecZQ[24]是yearTemp+2年夏至
+		int baseJD2 = int2((yearTemp + 2 - 2000.0) * 365.2422 + 180);
+		ssq.calcY(baseJD2);
+		std::vector<long double> vecZQ2 = ssq.getZhongQi();
+		nzq = qi_accurate2(vecZQ2[24], false, 120) + J2000; // yearTemp+2年夏至
+	}
+	else
+	{
+		// 定冬至：需要yearTemp年冬至、yearTemp+1年冬至、yearTemp+2年冬至
+		// 计算yearTemp+1年的节气数据，vecZQ[0]是yearTemp年冬至
+		int baseJD1 = int2((yearTemp + 1 - 2000.0) * 365.2422 + 180);
+		ssq.calcY(baseJD1);
+		std::vector<long double> vecZQ1 = ssq.getZhongQi();
+		pzq = qi_accurate2(vecZQ1[0], false, 120) + J2000;  // yearTemp年冬至
+		zq = qi_accurate2(vecZQ1[24], false, 120) + J2000;  // yearTemp+1年冬至
+		
+		// 计算yearTemp+2年的节气数据，vecZQ[24]是yearTemp+2年冬至
+		int baseJD2 = int2((yearTemp + 2 - 2000.0) * 365.2422 + 180);
+		ssq.calcY(baseJD2);
+		std::vector<long double> vecZQ2 = ssq.getZhongQi();
+		nzq = qi_accurate2(vecZQ2[24], false, 120) + J2000; // yearTemp+2年冬至
+	}
+	
 	std::array<long double,4> z{};
-	z[0] = (zq - pzq) / 12.0; //k，当年平气
-	z[1] = pzq + z[0] / 2.0;  //b，当年第一个节气小寒
-	z[2] = (nzq - zq) / 12.0; //k1，下年平气
-	z[3] = zq + z[2]/2.0;     //b1，下一年第一个节气小寒
+	z[0] = (zq - pzq) / 12.0; //k，当年平气间隔
+	z[1] = pzq + z[0] / 2.0;  //b，当年第一个节气小寒（从pzq即yearTemp年冬至开始算）
+	z[2] = (nzq - zq) / 12.0; //k1，下年平气间隔
+	z[3] = zq + z[2]/2.0;     //b1，下一年第一个节气小寒（从zq即yearTemp+1年冬至开始算）
 
 	return z;
 }
@@ -150,21 +170,29 @@ std::array<long double, 4> BaziBase::bkCalc(int year, int month, LiFaType lifa)
 // 计算立春，确保此函数中没有修改类的成员函数
 long double BaziBase::calcLichun(int year) const
 {
-    Time t0{};
-    t0.Y = year;
-    t0.M = 2;
-    t0.D = 2;
-    t0.h = 12;
-    t0.m = 0;
-    t0.s = 0;
-    auto jd = JD::toJD(t0) - J2000;
-    auto lichun = qi_accurate2(jd, false, 120) + J2000;
-    if (jd < lichun)
-    {
-        lichun -= 365.2422;
-    }
-
-    return lichun;
+	// 使用SSQ类精确计算立春
+	SSQ &ssq = SSQ::getInstance();
+	
+	// 计算指定年份的节气信息，以该年年中为基准
+	int baseJD = int2((year - 2000.0) * 365.2422 + 180);
+	ssq.calcY(baseJD);
+	std::vector<long double> vecZQ = ssq.getZhongQi();
+	
+	// 立春在vecZQ数组中的索引是3
+	auto lichun = qi_accurate2(vecZQ[3], false, 120) + J2000;
+	
+	// 验证计算结果的年份，如果不是目标年份则使用上一年的立春
+	Time t = JD::JD2DD(lichun);
+	if (t.Y != year)
+	{
+		// 重新计算上一年的立春
+		baseJD = int2((year - 1 - 2000.0) * 365.2422 + 180);
+		ssq.calcY(baseJD);
+		vecZQ = ssq.getZhongQi();
+		lichun = qi_accurate2(vecZQ[3], false, 120) + J2000;
+	}
+	
+	return lichun;
 }
 
 std::tuple<int, double, double> BaziBase::calcJieQiTermsByPingQi()
@@ -249,7 +277,7 @@ void BaziBase::calcJiaoYunDate(bool flag)
     Time t = JD::JD2DD(mJyJd_);
 
     auto sLunar = sxtwl::solar2Lunar2(t);
-    int mJyYeaer = sLunar.year;
+    mJyYear_ = sLunar.year;
 
     auto deltaM = std::floor(offset / (365.2422 / 12.0));
     offset -= deltaM * (365.2422 / 12.0);
@@ -841,20 +869,20 @@ std::vector<std::string> BaziBase::getFleetingYearList() const
     auto q = (jyYear + 8) % 12;
     std::vector<std::string> output;
     std::string opt;
-    for (int i = 0; i < 10; i++)
+    
+    // 外层循环8次（8个大运）
+    for (int i = 0; i < 8; i++)
     {
-        int m = q;
-        for (int j = 0; j < 8; j++)
+        // 内层循环10次（每个大运10年）
+        for (int j = 0; j < 10; j++)
         {
-            opt = std::string(Gan[p]) + Zhi[m];
-            m += 10;
-            m %= 12;
+            opt = std::string(Gan[p]) + Zhi[q];
             output.push_back(opt);
+            
+            // 天干和地支都递增1
+            p = (p + 1) % 10;
+            q = (q + 1) % 12;
         }
-        p += 1;
-        p %= 10;
-        q += 1;
-        q %= 12;
     }
     return output;
 }
@@ -947,5 +975,76 @@ std::string BaziBase::printBazi() const
     s += getQiYun();
     s += getJiaoYun();
     s += "\n";
+    
+    // 打印大运和流年
+    s += "=== 大运流年 ===\n\n";
+    
+    // 获取当前年份
+    Time nowTime = JD::getNowTime();
+    int currentYear = nowTime.getYear();
+    
+    // 获取大运列表和年份范围
+    auto daYunList = getDaYunList();
+    auto startYearList = getStartYearList();
+    auto endYearList = getEndYearList();
+    auto fleetingYearList = getFleetingYearList();
+    
+    // 遍历8个大运
+    for (size_t i = 0; i < daYunList.size(); i++)
+    {
+        int startYear = startYearList[i];
+        int endYear = endYearList[i];
+        
+        // 判断是否为当前大运
+        bool isCurrentDaYun = (currentYear >= startYear && currentYear <= endYear);
+        
+        // 打印大运标题
+        std::ostringstream ossTitle;
+        ossTitle << "【大运" << (i + 1) << "】 " << daYunList[i] 
+                 << "  (" << startYear << "-" << endYear << ")";
+        
+        if (isCurrentDaYun)
+        {
+            s += "\033[1;33m" + ossTitle.str() + " ← 当前大运\033[0m\n";
+        }
+        else
+        {
+            s += ossTitle.str() + "\n";
+        }
+        
+        // 打印该大运下的10个流年
+        s += "流年: ";
+        for (int j = 0; j < 10; j++)
+        {
+            int fleetingYearIndex = i * 10 + j;
+            if (fleetingYearIndex < static_cast<int>(fleetingYearList.size()))
+            {
+                int fleetingYear = startYear + j;
+                std::string fleetingYearGanZhi = fleetingYearList[fleetingYearIndex];
+                
+                // 判断是否为当前流年
+                bool isCurrentFleetingYear = (fleetingYear == currentYear);
+                
+                std::ostringstream ossFleetingYear;
+                ossFleetingYear << fleetingYearGanZhi << "(" << fleetingYear << ")";
+                
+                if (isCurrentFleetingYear)
+                {
+                    s += "\033[1;32m" + ossFleetingYear.str() + " ← 当前\033[0m";
+                }
+                else
+                {
+                    s += ossFleetingYear.str();
+                }
+                
+                if (j < 9)
+                {
+                    s += "  ";
+                }
+            }
+        }
+        s += "\n\n";
+    }
+    
     return s;
 }
