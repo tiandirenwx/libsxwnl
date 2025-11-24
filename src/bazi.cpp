@@ -128,18 +128,25 @@ std::array<long double, 4> BaziBase::bkCalc(int year, int month, LiFaType lifa)
 	if (lifa == YuWuWeiZiPingLifa_DingXiaZhi)
 	{
 		// 定夏至：需要yearTemp年夏至、yearTemp+1年夏至、yearTemp+2年夏至
-		// 计算yearTemp+1年的节气数据，vecZQ[0]是yearTemp年夏至（前一年的夏至在索引0）
+		
+		// 1. yearTemp年夏至
+		// 计算yearTemp年年中基准，获取该年夏至(索引12)
+		int baseJD0 = int2((yearTemp - 2000.0) * 365.2422 + 180);
+		ssq.calcY(baseJD0);
+		std::vector<long double> vecZQ0 = ssq.getZhongQi();
+		pzq = qi_accurate2(vecZQ0[12], false, 120) + J2000;
+
+		// 2. yearTemp+1年夏至
 		int baseJD1 = int2((yearTemp + 1 - 2000.0) * 365.2422 + 180);
 		ssq.calcY(baseJD1);
 		std::vector<long double> vecZQ1 = ssq.getZhongQi();
-		pzq = qi_accurate2(vecZQ1[0], false, 120) + J2000;  // yearTemp年夏至
-		zq = qi_accurate2(vecZQ1[24], false, 120) + J2000;  // yearTemp+1年夏至
+		zq = qi_accurate2(vecZQ1[12], false, 120) + J2000;
 		
-		// 计算yearTemp+2年的节气数据，vecZQ[24]是yearTemp+2年夏至
+		// 3. yearTemp+2年夏至
 		int baseJD2 = int2((yearTemp + 2 - 2000.0) * 365.2422 + 180);
 		ssq.calcY(baseJD2);
 		std::vector<long double> vecZQ2 = ssq.getZhongQi();
-		nzq = qi_accurate2(vecZQ2[24], false, 120) + J2000; // yearTemp+2年夏至
+		nzq = qi_accurate2(vecZQ2[12], false, 120) + J2000;
 	}
 	else
 	{
@@ -206,11 +213,27 @@ std::tuple<int, double, double> BaziBase::calcJieQiTermsByPingQi()
     auto k = array[0], b = array[1], k1 = array[2], b1 = array[3];
     auto daxue = b - k;
     auto lichun = b + k;
+
+    // 对于定夏至，b是小暑(7月)。如果mBdJd_在上半年，会小于b。
+    // 此时不能简单判定为 index=0 (即大雪/芒种)，而应该计算负偏移。
+    // 定冬至模式下 b是小寒(1月)，小于b的情况仅限于1月初(属于上年大雪)，index=0是合理的。
     if (mBdJd_ < b)
     {
-        index = 0;
-        mHeadJieQiJd_ = b - k; // 大雪
-        mTailJieQiJd_ = b;     // 小寒
+        if (mLifa_ == YuWuWeiZiPingLifa_DingXiaZhi)
+        {
+            // 定夏至模式下，允许计算负 index
+            auto n = std::floor((mBdJd_ - b) / k);
+            D = k * n + b;
+            index = int(n) + 1;
+            mHeadJieQiJd_ = D;
+            mTailJieQiJd_ = D + k;
+        }
+        else
+        {
+            index = 0;
+            mHeadJieQiJd_ = b - k; // 大雪
+            mTailJieQiJd_ = b;     // 小寒
+        }
     }
     else if (b <= mBdJd_ && mBdJd_ < b1)
     {
@@ -238,6 +261,27 @@ std::tuple<int, double, double> BaziBase::calcJieQiTermsByPingQi()
     {
         mHeadJieQiAstJd_ = mHeadJieQiJd_;
         mTailJieQiAstJd_ = mTailJieQiJd_;
+    }
+
+    // 针对定夏至的统一修正逻辑
+    if (mLifa_ == YuWuWeiZiPingLifa_DingXiaZhi)
+    {
+        // 1. 修正年界 lichun
+        // 原始 lichun 是立秋(b+k)。减去半年回到同年的立春。
+        lichun -= 182.62;
+        
+        // 如果 index >= 8 (寅月/立春)，说明虽然计算基准是上一年(导致 lichun 也是上一年)，
+        // 但实际时间已经跨入下一年。为了让外部能正确判定年柱，需要把 lichun 推到下一年。
+        // (注: index 是相对于芒种的月数。芒种=0 ... 立春=8)
+        if (index >= 8)
+        {
+            lichun += 365.2422;
+        }
+
+        // 2. 修正月柱 index
+        // 定夏至以芒种(午月)为基准，普通法以大雪(子月)为基准。
+        // 两者相差 6 个月。外部公式通用，所以这里补偿 6 个月。
+        index += 6;
     }
 
     return std::make_tuple(index, daxue, lichun);
@@ -423,13 +467,21 @@ void BaziBase::calcPingQiPaiPan()
     auto shiZhu = (D - 1) * 12 + 90000000 + SC;
 
     arraySiZhu_[0] = nianZhu % 10;
+    if (arraySiZhu_[0] < 0) arraySiZhu_[0] += 10;
     arraySiZhu_[1] = nianZhu % 12;
+    if (arraySiZhu_[1] < 0) arraySiZhu_[1] += 12;
     arraySiZhu_[2] = yueZhu % 10;
+    if (arraySiZhu_[2] < 0) arraySiZhu_[2] += 10;
     arraySiZhu_[3] = yueZhu % 12;
+    if (arraySiZhu_[3] < 0) arraySiZhu_[3] += 12;
     arraySiZhu_[4] = riZhu % 10;
+    if (arraySiZhu_[4] < 0) arraySiZhu_[4] += 10;
     arraySiZhu_[5] = riZhu % 12;
+    if (arraySiZhu_[5] < 0) arraySiZhu_[5] += 12;
     arraySiZhu_[6] = shiZhu % 10;
+    if (arraySiZhu_[6] < 0) arraySiZhu_[6] += 10;
     arraySiZhu_[7] = shiZhu % 12;
+    if (arraySiZhu_[7] < 0) arraySiZhu_[7] += 12;
 
     auto j = arraySiZhu_[4];
     if (j % 2 == 0)
@@ -481,11 +533,15 @@ void BaziBase::calcDingQiPaiPan()
     // 年
     int v = int2(k / 12.0 + 6000000);
     arraySiZhu_[0] = v % 10;
+    if (arraySiZhu_[0] < 0) arraySiZhu_[0] += 10;
     arraySiZhu_[1] = v % 12;
+    if (arraySiZhu_[1] < 0) arraySiZhu_[1] += 12;
     // 月
     v = k + 2 + 60000000;
     arraySiZhu_[2] = v % 10;
+    if (arraySiZhu_[2] < 0) arraySiZhu_[2] += 10;
     arraySiZhu_[3] = v % 12;
+    if (arraySiZhu_[3] < 0) arraySiZhu_[3] += 12;
 
     // 子时转日
     jd += 13.0 / 24 - J2000 ;                            // 转为前一日23点起算(原jd为本日中午12点起算)
@@ -493,11 +549,15 @@ void BaziBase::calcDingQiPaiPan()
     // 日
     v = D - 6 + 9000000;
     arraySiZhu_[4] = v % 10;
+    if (arraySiZhu_[4] < 0) arraySiZhu_[4] += 10;
     arraySiZhu_[5] = v % 12;
+    if (arraySiZhu_[5] < 0) arraySiZhu_[5] += 12;
     // 时
     v = (D - 1) * 12 + 90000000 + SC;
     arraySiZhu_[6] = v % 10;
+    if (arraySiZhu_[6] < 0) arraySiZhu_[6] += 10;
     arraySiZhu_[7] = v % 12;
+    if (arraySiZhu_[7] < 0) arraySiZhu_[7] += 12;
     // 十神
     auto j = arraySiZhu_[4];
     if (j % 2 == 0)
@@ -872,7 +932,9 @@ std::vector<std::string> BaziBase::getFleetingYearList(bool vertical) const
 {
     int jyYear = mJyYear_;
     auto p = (jyYear + 6) % 10;
+    if (p < 0) p += 10;
     auto q = (jyYear + 8) % 12;
+    if (q < 0) q += 12;
     std::vector<std::string> output;
     std::string opt;
     

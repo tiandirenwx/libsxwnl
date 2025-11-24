@@ -191,7 +191,7 @@ int main(int argc, char *argv[])
         JINGWEI jw = {120, 39.9, "默认", "北京"};
         SBaziInputPara sBZ;
         sBZ.birthDayTime = birthTime;
-        sBZ.calendar = CalendarSolar;
+        sBZ.calendar = CalendarLunar;
         sBZ.gender = false;
         if (std::stoi(argv[2]) == 1)
         {
@@ -272,7 +272,7 @@ int main(int argc, char *argv[])
     sBZ.isRun = false;
     sBZ.isSpec = false;
     sBZ.jw = jw;
-    sBZ.lifa = YuWuWeiZiPingLifa_DingDongZhi;
+    sBZ.lifa = YuWuWeiZiPingLifa_DingXiaZhi;
     sBZ.name = "禚主";
     BaziBase obj(sBZ);
     obj.calcBaziPaiPan();
