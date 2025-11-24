@@ -224,7 +224,7 @@ int main(int argc, char *argv[])
         sBZ.isRun = (std::stoi(argv[3]) == 1);
         sBZ.isSpec = (std::stoi(argv[4]) == 1);
         sBZ.jw = jw;
-        sBZ.lifa = YuWuWeiZiPingLifa_DingXiaZhi;
+        sBZ.lifa = YuWuWeiZiPingLifa_DingDongZhi;
         sBZ.name = "无名";
         BaziBase obj(sBZ);
         obj.calcBaziPaiPan();
@@ -259,28 +259,27 @@ int main(int argc, char *argv[])
     ML_calc(nowTime);
     return 0;
     */
-    /*
-    Time birthTime = {2017, 9, 2, 12, 37, 0};
+    
+    Time birthTime = {1978, 11, 8, 14, 32, 0};
     //GeoPostion &gep = GeoPostion::getInstance();
     //JINGWEI jw = gep.getCityGeoPos();
-    JINGWEI jw={120, 39.9, "默认", "默认"};
+    JINGWEI jw={120, 39.9, "深圳", "蛇常堂"};
     SBaziInputPara sBZ;
     sBZ.birthDayTime = birthTime;
-    sBZ.calendar = CalendarLunar;
-    sBZ.gender = true;
+    sBZ.calendar = CalendarSolar;
+    sBZ.gender = false;
     sBZ.isAst = false;
     sBZ.isRun = false;
     sBZ.isSpec = false;
     sBZ.jw = jw;
     sBZ.lifa = YuWuWeiZiPingLifa_DingDongZhi;
-    sBZ.name = "无名";
+    sBZ.name = "禚主";
     BaziBase obj(sBZ);
     obj.calcBaziPaiPan();
     auto s = obj.printBazi();
     std::cout << s << std::endl;
 
     return 0;
-    */
 
     // // 定气节令获取
 

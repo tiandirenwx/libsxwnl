@@ -106,7 +106,7 @@ public:
     std::string getJiaoYun() const;
     std::vector<std::string> getDaYunList() const;
     std::vector<int> getStartYearList() const;
-    std::vector<std::string> getFleetingYearList() const;
+    std::vector<std::string> getFleetingYearList(bool vertical = false) const;
     std::vector<int> getEndYearList() const;
     std::string printBazi() const;
 

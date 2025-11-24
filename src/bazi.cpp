@@ -633,15 +633,23 @@ std::string BaziBase::getLifa() const
         s = "依据" + std::string(LifaList[mLifa_ - 1]) + "数据拟合";
         return "『定气方式』 " + s;
     }
-    else if (XianDaiNongLifa_DingQiFa == mLifa_)
+
+    if (XianDaiNongLifa_DingQiFa == mLifa_)
     {
         s = "现代农历定气";
         return "『定气方式』 " + s;
     }
-    else
+
+    if (YuWuWeiZiPingLifa_DingDongZhi == mLifa_)
     {
-        return "『定气方式』 依据尤氏子平历计算节气交接日期";
+        return "『定气方式』 依据尤氏子平历定冬至计算节气交接日期";
     }
+
+    if (YuWuWeiZiPingLifa_DingXiaZhi == mLifa_)
+    {
+        return "『定气方式』 依据尤氏子平历定夏至计算节气交接日期";
+    }
+    return "『定气方式』 未知";
 }
 
 std::string BaziBase::getAst() const
@@ -860,30 +868,48 @@ std::vector<int> BaziBase::getStartYearList() const
     return output;
 }
 
-std::vector<std::string> BaziBase::getFleetingYearList() const
+std::vector<std::string> BaziBase::getFleetingYearList(bool vertical) const
 {
-
     int jyYear = mJyYear_;
-
     auto p = (jyYear + 6) % 10;
     auto q = (jyYear + 8) % 12;
     std::vector<std::string> output;
     std::string opt;
     
-    // 外层循环8次（8个大运）
-    for (int i = 0; i < 8; i++)
+    if (vertical)
     {
-        // 内层循环10次（每个大运10年）
-        for (int j = 0; j < 10; j++)
+        // 竖排：外层循环10次（每个大运10年），内层循环8次（8个大运）
+        for (int i = 0; i < 10; i++)
         {
-            opt = std::string(Gan[p]) + Zhi[q];
-            output.push_back(opt);
-            
-            // 天干和地支都递增1
+            int m = q;
+            for (int j = 0; j < 8; j++)
+            {
+                opt = std::string(Gan[p]) + Zhi[m];
+                output.push_back(opt);
+                m = (m + 10) % 12;
+            }
             p = (p + 1) % 10;
             q = (q + 1) % 12;
         }
     }
+    else
+    {
+        // 横排：外层循环8次（8个大运），内层循环10次（每个大运10年）
+        for (int i = 0; i < 8; i++)
+        {
+            // 内层循环10次（每个大运10年）
+            for (int j = 0; j < 10; j++)
+            {
+                opt = std::string(Gan[p]) + Zhi[q];
+                output.push_back(opt);
+                
+                // 天干和地支都递增1
+                p = (p + 1) % 10;
+                q = (q + 1) % 12;
+            }
+        }
+    }
+    
     return output;
 }
 
@@ -976,7 +1002,7 @@ std::string BaziBase::printBazi() const
     s += getJiaoYun();
     s += "\n";
     
-    // 打印大运和流年
+    // 打印大运和流年（竖排）
     s += "=== 大运流年 ===\n\n";
     
     // 获取当前年份
@@ -987,64 +1013,95 @@ std::string BaziBase::printBazi() const
     auto daYunList = getDaYunList();
     auto startYearList = getStartYearList();
     auto endYearList = getEndYearList();
-    auto fleetingYearList = getFleetingYearList();
+    auto fleetingYearList = getFleetingYearList(true); // 使用竖排方式
     
-    // 遍历8个大运
+    // 定义列宽（视觉宽度）
+    const int colVisWidth = 12;
+    const int labelVisWidth = 8;
+    
+    // 辅助lambda：生成指定数量的空格
+    auto getPad = [](int count) { return std::string(count > 0 ? count : 0, ' '); };
+    
+    // 打印大运标题行
+    s += "大运" + getPad(labelVisWidth - 4); // "大运"视觉宽度为4
     for (size_t i = 0; i < daYunList.size(); i++)
     {
-        int startYear = startYearList[i];
-        int endYear = endYearList[i];
+        s += daYunList[i] + getPad(colVisWidth - 4); // 干支视觉宽度为4
+    }
+    s += "\n";
+    
+    // 打印年份范围行
+    s += "起止年" + getPad(labelVisWidth - 6); // "起止年"视觉宽度为6
+    for (size_t i = 0; i < startYearList.size(); i++)
+    {
+        std::ostringstream yearRange;
+        yearRange << startYearList[i] << "-" << endYearList[i];
+        s += yearRange.str() + getPad(colVisWidth - 9); // "YYYY-YYYY"视觉宽度为9
+    }
+    s += "\n";
+    s += std::string(labelVisWidth + 8 * colVisWidth, '=') + "\n";
+    
+    // 竖排打印流年（每行代表大运内的第N年，横向展示8个大运的该年份流年）
+    for (int yearOffset = 0; yearOffset < 10; yearOffset++)
+    {
+        // 先输出流年干支行
+        s += getPad(labelVisWidth);
         
-        // 判断是否为当前大运
-        bool isCurrentDaYun = (currentYear >= startYear && currentYear <= endYear);
-        
-        // 打印大运标题
-        std::ostringstream ossTitle;
-        ossTitle << "【大运" << (i + 1) << "】 " << daYunList[i] 
-                 << "  (" << startYear << "-" << endYear << ")";
-        
-        if (isCurrentDaYun)
+        for (int dayunIdx = 0; dayunIdx < 8; dayunIdx++)
         {
-            s += "\033[1;33m" + ossTitle.str() + " ← 当前大运\033[0m\n";
-        }
-        else
-        {
-            s += ossTitle.str() + "\n";
-        }
-        
-        // 打印该大运下的10个流年
-        s += "流年: ";
-        for (int j = 0; j < 10; j++)
-        {
-            int fleetingYearIndex = i * 10 + j;
+            // 竖排索引：yearOffset * 8 + dayunIdx
+            int fleetingYearIndex = yearOffset * 8 + dayunIdx;
             if (fleetingYearIndex < static_cast<int>(fleetingYearList.size()))
             {
-                int fleetingYear = startYear + j;
                 std::string fleetingYearGanZhi = fleetingYearList[fleetingYearIndex];
+                int actualYear = startYearList[dayunIdx] + yearOffset;
                 
                 // 判断是否为当前流年
-                bool isCurrentFleetingYear = (fleetingYear == currentYear);
-                
-                std::ostringstream ossFleetingYear;
-                ossFleetingYear << fleetingYearGanZhi << "(" << fleetingYear << ")";
+                bool isCurrentFleetingYear = (actualYear == currentYear);
                 
                 if (isCurrentFleetingYear)
                 {
-                    s += "\033[1;32m" + ossFleetingYear.str() + " ← 当前\033[0m";
+                    // 当前流年用红色标注
+                    s += "\033[1;31m" + fleetingYearGanZhi + "\033[0m" + getPad(colVisWidth - 4);
                 }
                 else
                 {
-                    s += ossFleetingYear.str();
-                }
-                
-                if (j < 9)
-                {
-                    s += "  ";
+                    s += fleetingYearGanZhi + getPad(colVisWidth - 4);
                 }
             }
+            else
+            {
+                s += getPad(colVisWidth);
+            }
         }
-        s += "\n\n";
+        s += "\n";
+        
+        // 输出年份行
+        s += getPad(labelVisWidth);
+        
+        for (int dayunIdx = 0; dayunIdx < 8; dayunIdx++)
+        {
+            int actualYear = startYearList[dayunIdx] + yearOffset;
+            bool isCurrentFleetingYear = (actualYear == currentYear);
+            
+            std::ostringstream tempYear;
+            tempYear << "(" << actualYear << ")";
+            std::string yearStr = tempYear.str();
+            
+            if (isCurrentFleetingYear)
+            {
+                // 当前流年用红色标注
+                s += "\033[1;31m" + yearStr + "\033[0m" + getPad(colVisWidth - 6); // "(YYYY)"视觉宽度为6
+            }
+            else
+            {
+                s += yearStr + getPad(colVisWidth - 6);
+            }
+        }
+        s += "\n";
     }
+    
+    s += "\n";
     
     return s;
 }
