@@ -28,7 +28,7 @@ BaziBase::BaziBase(const SBaziInputPara &input)
     {
         // 农历转公历
         auto lyYear = input.birthDayTime.getYear();
-        auto lyMonth = u_int8_t(input.birthDayTime.getMonth());
+        auto lyMonth = uint8_t(input.birthDayTime.getMonth());
         auto lyDay = input.birthDayTime.getDay();
         auto hour = input.birthDayTime.getHour();
         auto min = input.birthDayTime.getMin();
@@ -595,6 +595,14 @@ void BaziBase::calcDingQiPaiPan()
     calcJieQiTermsByDingQi();
     // 计算交运
     calcJiaoYunDate(flag);
+}
+
+int BaziBase::getDaysAfterJie() const
+{
+    long double bd = mIsAst_ ? mAstJd_ : mBdJd_;
+    long double jie = mIsAst_ ? mHeadJieQiAstJd_ : mHeadJieQiJd_;
+    int days = int(std::floor(bd - jie));
+    return days < 0 ? 0 : days;
 }
 
 std::string BaziBase::getSolarBirth() const

@@ -1,0 +1,352 @@
+# ════════════════════════════════════════════════════════════════════
+#  libsxwnl — 寿星万年历 (C++ 核心 + HarmonyOS / Android / iOS 三端)
+#  根级 .gitignore
+#  原则: 只跟踪源码/配置/资源, 不跟踪编译产物/IDE 用户数据/密钥/缓存
+# ════════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────
+# 1. 操作系统 & 编辑器 通用临时文件
+# ─────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Vim / Emacs / Nano / 通用临时
+*.swp
+*.swo
+*.swn
+*.bak
+*.orig
+*.tmp
+*~
+.#*
+\#*\#
+
+# ─────────────────────────────────────────────
+# 2. IDE / 编辑器配置 (用户级, 不应纳入版本控制)
+# ─────────────────────────────────────────────
+# JetBrains 全家桶 (IDEA / AndroidStudio / CLion / WebStorm 等)
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# VS Code (允许通过 !.vscode/ 子规则定制白名单)
+.vscode/
+*.code-workspace
+
+# Cursor 本地工程数据
+.cursor/
+
+# Eclipse / NetBeans
+.classpath
+.project
+.settings/
+.metadata/
+nbproject/private/
+
+# clangd / clang-tidy / ccls / SourceTrail 索引缓存
+.clangd/
+.clangd
+.cache/clangd/
+.ccls-cache/
+.cquery_cached_index/
+compile_flags.txt
+.sourcetrail*
+
+# VSCode local-history 插件 / JetBrains HTTP Client / Cursor 项目缓存
+.history/
+.httpRequests/
+.fleet/
+
+# ─────────────────────────────────────────────
+# 3. 日志 & 系统输出
+# ─────────────────────────────────────────────
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+hs_err_pid*.log
+crash.log
+
+# ─────────────────────────────────────────────
+# 4. C / C++ / CMake (核心源 src/, capi/)
+# ─────────────────────────────────────────────
+# 通用编译产物
+*.o
+*.obj
+*.lo
+*.slo
+*.ko
+*.so
+*.so.*
+*.dylib
+*.dll
+*.a
+*.la
+*.lai
+*.exe
+*.out
+a.out
+*.app
+*.pdb
+*.ilk
+*.exp
+*.idb
+*.gch
+*.pch
+*.d
+*.dSYM/
+
+# capi/ 下用 CMake/clang 直接编译的测试可执行 (无扩展名)
+capi/test_capi
+capi/test_*
+!capi/test_*.c
+!capi/test_*.cpp
+!capi/test_*.h
+
+# 构建目录 (根级和子目录的 CMake/Make 默认输出)
+/build/
+/build-*/
+/cmake-build-*/
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+CMakeScripts/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+Makefile
+!CMakeLists.txt
+
+# Ninja
+.ninja_deps
+.ninja_log
+
+# Conan / vcpkg
+conan_paths.cmake
+conanbuildinfo.*
+vcpkg_installed/
+
+# ─────────────────────────────────────────────
+# 5. Android (android/)
+# ─────────────────────────────────────────────
+android/build/
+android/.gradle/
+android/.idea/
+android/local.properties
+android/captures/
+android/app/build/
+android/app/.cxx/
+android/app/.externalNativeBuild/
+android/app/release/
+android/app/debug/
+android/**/build/
+android/**/.cxx/
+android/**/.externalNativeBuild/
+android/**/proguard/
+android/**/seeds.txt
+android/**/mapping.txt
+# Android Studio Profiler 数据 / Build 缓存
+*.hprof
+*.heap
+
+# Android Dex / class 中间产物
+*.dex
+*.class
+
+# Gradle 缓存/版本锁
+.gradle/
+gradle-app.setting
+!gradle-wrapper.jar
+!gradle-wrapper.properties
+
+# Android Profiler / Layout Inspector / Lint baseline 副产物
+android/**/captures/
+android/**/lint/intermediates/
+android/**/lint/generated/
+android/**/lint/outputs/
+android/**/lint/tmp/
+
+# ─────────────────────────────────────────────
+# 6. iOS / macOS / Xcode (ios/)
+# ─────────────────────────────────────────────
+ios/build/
+ios/DerivedData/
+ios/**/DerivedData/
+ios/**/build/
+
+# Xcode 用户级数据 (个人 scheme / 断点 / 窗口状态)
+**/xcuserdata/
+**/xcuserdata
+*.xcuserstate
+*.xcuserdatad/
+*.xccheckout
+*.moved-aside
+*.xcsmblueprint
+*.xcscmblueprint
+*.playground/
+timeline.xctimeline
+playground.xcworkspace
+
+# 嵌套 git 仓库 (Xcode 14+ / AndroidStudio 新建项目时常自动 git init,
+# 留下 ios/SxwnlCalendar/.git 这类内嵌仓库, 会污染外层仓库结构).
+# 注: 根仓库自己的 .git/ 由 git 本身排除, 不受此规则影响.
+**/.git/
+
+# Xcode 工程内的 workspace 用户数据 (但保留 .xcworkspace 本体)
+**/project.xcworkspace/xcuserdata/
+**/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+
+# Swift Package Manager
+.swiftpm/
+ios/**/.swiftpm/
+Package.resolved
+.build/
+
+# CocoaPods (项目目前未用, 但若引入 Pods 会被忽略)
+Pods/
+*.xcworkspace/contents.xcworkspacedata
+!ios/**/project.xcworkspace/contents.xcworkspacedata
+
+# Carthage / Fastlane
+Carthage/Build/
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# ─────────────────────────────────────────────
+# 7. HarmonyOS / DevEco Studio (harmony/)
+#    注: harmony/.gitignore 已有更细规则, 此处为兜底
+# ─────────────────────────────────────────────
+harmony/build/
+harmony/.cxx/
+harmony/.hvigor/
+harmony/.appanalyzer/
+harmony/.clangd/
+harmony/.deveco/
+harmony/oh_modules/
+harmony/**/build/
+harmony/**/.cxx/
+harmony/**/.hvigor/
+harmony/**/oh_modules/
+harmony/**/.preview/
+harmony/**/.test/
+harmony/**/.deveco/
+harmony/local.properties
+harmony/hvigor-debug.log
+# DevEco 本地配置覆盖
+local.properties.*
+*.local.json5
+
+# HarmonyOS 二进制依赖包/产物 (源码以 .ets/.cpp 维护, 不应提交 .har/.hsp 等编译产物)
+*.har
+*.hsp
+
+# ─────────────────────────────────────────────
+# 8. 签名 / 密钥 / 凭据 (绝对不能入库)
+# ─────────────────────────────────────────────
+# 通用密钥
+*.pem
+*.key
+*.crt
+*.cer
+*.csr
+*.pfx
+*.p12
+*.p7b
+*.p8
+
+# Android
+*.jks
+*.keystore
+keystore.properties
+android/**/keystore.properties
+android/keystore/
+
+# iOS
+*.mobileprovision
+*.provisionprofile
+ios/**/Pods/
+ios/**/GoogleService-Info.plist
+
+# Harmony 签名材料
+harmony/**/signing/
+harmony/**/*.cer
+harmony/**/*.csr
+harmony/**/*.p12
+harmony/**/*.p7b
+
+# 通用环境/配置 (含 token / secret)
+.env
+.env.*
+!.env.example
+secrets.json
+credentials.json
+
+# ─────────────────────────────────────────────
+# 9. 打包产物 (统一进 dist/, dist/ 本身忽略)
+#    若需要保留某次发版包, 走 GitHub Releases / 附件
+# ─────────────────────────────────────────────
+dist/
+out/
+release/
+*.apk
+*.aab
+*.hap
+*.ipa
+*.dmg
+*.pkg
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+# 但允许跟踪 README/文档里引用的小图等 (按需手动 !path 白名单)
+
+# ─────────────────────────────────────────────
+# 10. Node / NPM / Python (脚本/工具链可能用到)
+# ─────────────────────────────────────────────
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/cache
+.yarn/install-state.gz
+yarn.lock.bak
+.parcel-cache/
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+.python-version
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ─────────────────────────────────────────────
+# 11. 工程辅助 / 临时
+# ─────────────────────────────────────────────
+.cache/
+.tmp/
+tmp/
+temp/
+coverage/
+.nyc_output/
+
+# 项目内"暂存"目录约定 (本仓库自定义)
+scratch/
+playground/
+TODO.local.md
+NOTES.local.md

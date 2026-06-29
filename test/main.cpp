@@ -10,6 +10,19 @@
 #include "geo.h"
 #include "eph_show.h"
 #include "bazi.h"
+#include "sxtwl.h"
+#include "day.h"
+#include "festival_zh.h"
+#include "year_utils.h"
+#include "map_projection.h"
+#include "world_map.h"
+#include "star_eph.h"
+#include "star_catalog.h"
+#include "month_calendar.h"
+#include "JD.h"
+#include "sx_lang_zh.h"
+#include <iostream>
+#include <iomanip>
 
 //===============================================================
 #ifdef _WIN32
@@ -43,6 +56,44 @@ int main(int argc, char *argv[])
     SetConsoleOutputCP(65001);
     // system("@chcp 65001");
 #endif
+
+    // 综合月历: cal [year] [month]
+    if (argc >= 2 && "cal" == std::string(argv[1]))
+    {
+        int y = (argc > 2) ? std::atoi(argv[2]) : 2026;
+        int m = (argc > 3) ? std::atoi(argv[3]) : 6;
+        sxwnl::MonthCalendar cal(y, m);
+        std::cout << "════ " << cal.year() << "年" << cal.month() << "月  "
+                  << Gan[cal.yearGZ().tg] << Zhi[cal.yearGZ().dz]
+                  << "(" << cal.shengXiao() << "年)  "
+                  << "月首星期:" << (int)cal.firstWeek()
+                  << "  天数:" << cal.dayCount()
+                  << "  总周:" << (int)cal.totalWeeks() << std::endl;
+        std::cout << "  年号: " << cal.nianHao() << std::endl;
+        for (const auto &cd : cal.days())
+        {
+            Day &d = *cd.day;
+            GZ ygz = d.getYearGZ(true);
+            GZ mgz = d.getMonthGZ();
+            GZ dgz = d.getDayGZ();
+            std::cout << "  " << std::setw(2) << d.getSolarDay()
+                      << " 周" << (int)d.getWeek()
+                      << "  农:" << d.getLunarMonthName() << d.getLunarDayName()
+                      << "  回:" << d.getMoslemYear() << "-"
+                      << (int)d.getMoslemMonth() << "-" << d.getMoslemDay()
+                      << "  干支:" << Gan[ygz.tg] << Zhi[ygz.dz]
+                                   << Gan[mgz.tg] << Zhi[mgz.dz]
+                                   << Gan[dgz.tg] << Zhi[dgz.dz];
+            if (d.hasJieQi())    std::cout << "  ✦" << d.getJieQiName()    << " " << d.getJieQiTimeStr();
+            if (d.hasYueXiang()) std::cout << "  ●" << d.getYueXiangName() << " " << d.getYueXiangTimeStr();
+            auto info = d.getFestivalInfo();
+            if (!info.holiday.empty()) std::cout << "  ★" << info.holiday;
+            if (!info.misc.empty())    std::cout << "  "  << info.misc;
+            if (info.isOffDay)         std::cout << " [休]";
+            std::cout << std::endl;
+        }
+        return 0;
+    }
 
     if (2 == argc)
     {
@@ -121,6 +172,94 @@ int main(int argc, char *argv[])
             auto astTime = JD::calcAST(nowTime, jw.J);
             auto zty = std::get<2>(astTime);
             std::cout << jw.s << jw.x << "平太阳时:" << pty << ",真太阳时:" << zty << std::endl;
+            return 0;
+        }
+        else if ("ft" == std::string(argv[1]))
+        {
+            // 节日演示: 输出今日 + 几个典型节日
+            auto demo = [](int y, int m, int d, const char *label) {
+                std::unique_ptr<Day> day(sxtwl::fromSolar(y, m, d));
+                festival::DayInfo f = day->getFestivalInfo();
+                std::cout << label << " " << y << "-" << m << "-" << d
+                          << " holiday=" << f.holiday
+                          << " major="   << f.major
+                          << " minor="   << f.minor
+                          << " misc="    << f.misc
+                          << " off="     << f.isOffDay << std::endl;
+            };
+            demo(2026, 1, 1,  "[元旦]");
+            demo(2026, 2, 17, "[春节]");
+            demo(2026, 4, 5,  "[清明]");
+            demo(2026, 10, 1, "[国庆]");
+            demo(2026, 12, 22,"[冬至]");
+            return 0;
+        }
+        else if ("yu" == std::string(argv[1]))
+        {
+            // 纪年/时间字符串工具演示
+            std::cout << "公元前 221 -> "  << year_utils::year2Ayear("公元前 221") << std::endl;
+            std::cout << "-221       -> "  << year_utils::year2Ayear("-221") << std::endl;
+            std::cout << "2024年     -> "  << year_utils::year2Ayear("2024年") << std::endl;
+            std::cout << "astro -220 -> "  << year_utils::Ayear2year(-220) << std::endl;
+            std::cout << "astro 2024 -> "  << year_utils::Ayear2year(2024) << std::endl;
+            std::cout << "12:30:00   -> "  << year_utils::timeStr2hour("12:30:00") << " h" << std::endl;
+            std::cout << "8:15:30.5  -> "  << year_utils::timeStr2hour("8:15:30.5") << " h" << std::endl;
+            return 0;
+        }
+        else if ("mp" == std::string(argv[1]))
+        {
+            // 9 种地图投影演示
+            map_projection::Projector p;
+            const char *names[9] = {
+                "0平面正投","1斜轴等距方位","2斜轴等积方位","3斜轴等角方位",
+                "4摩尔威特","5正轴等距圆柱","6正轴等角圆柱","7多圆锥","8中国灯笼"
+            };
+            for (int t = 0; t <= 8; ++t)
+            {
+                p.setlx(t, 0.0L, 0.0L);
+                // (北京 116E,40N)
+                auto pt = p.toxy(2.0245L, 0.6981L);
+                std::cout << names[t]
+                          << " 北京 -> (" << std::fixed << std::setprecision(6)
+                          << (double)pt.x << ", " << (double)pt.y << ") z="
+                          << (double)pt.z << std::endl;
+            }
+            const auto &v = world_map::ditu0();
+            std::cout << "ditu0 points = " << v.size() / 2 << std::endl;
+            return 0;
+        }
+        else if ("hx" == std::string(argv[1]))
+        {
+            using namespace star_catalog;
+            const auto &xz = list88();
+            std::cout << "88 星座共 " << xz.size() << " 个" << std::endl;
+            std::cout << "[0] " << xz[0].nameAbbr << "  英文: " << xz[0].nameEn
+                      << "  RA=" << xz[0].raStr << "  DEC=" << xz[0].decStr
+                      << std::endl;
+
+            auto stars = getLibrary("库1");
+            std::cout << "库1 主星数 = " << stars.size() << std::endl;
+            for (const auto &s : stars)
+                std::cout << "  " << s.name << " | " << s.info
+                          << "  ra=" << (double)s.ra
+                          << " dec=" << (double)s.dec
+                          << " mag=" << (double)s.mag << std::endl;
+
+            // 织女星 视位置
+            auto vega = search(std::string("α A0"));
+            if (!vega.empty())
+            {
+                long double jd_bj = 2461221.0417L;          // 2026-06-29 21:00 北京
+                long double d_utc = jd_bj - J2000 - 8.0L / 24.0L;
+                long double t     = (d_utc + dt_T(d_utc)) / 36525.0L;
+                auto r = hxCalc(vega, t, 0.0L, 0,
+                                116.38L * (long double)PI / 180.0L,
+                                39.9L  * (long double)PI / 180.0L);
+                for (const auto &x : r)
+                    std::cout << "视位置 " << x.name
+                              << "  α=" << (double)x.a
+                              << "  δ=" << (double)x.b << std::endl;
+            }
             return 0;
         }
         else if ("bz" == std::string(argv[1]))

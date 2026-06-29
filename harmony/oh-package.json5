@@ -1,0 +1,13 @@
+{
+  "modelVersion": "6.1.1",
+  "name": "sxwnl-calendar",
+  "version": "1.0.0",
+  "description": "寿星万年历 - 鸿蒙版",
+  "main": "",
+  "author": "",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "@ohos/hypium": "1.0.18"
+  }
+}

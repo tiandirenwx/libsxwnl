@@ -1,0 +1,35 @@
+# ============================================================
+# HarmonyOS / DevEco Studio
+# ============================================================
+
+# 构建产物
+build/
+.cxx/
+.hvigor/
+oh_modules/
+*/oh_modules/
+**/oh_modules/
+
+# IDE
+.idea/
+.appanalyzer/
+*.iml
+
+# 本地配置（包含本机 SDK 路径等）
+local.properties
+
+# 签名相关（私钥/证书绝对不能提交）
+*.p12
+*.jks
+*.cer
+*.csr
+*.p7b
+signing/
+**/signing/
+
+# 日志
+*.log
+hvigor-debug.log
+
+# 系统文件
+.DS_Store

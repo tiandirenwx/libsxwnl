@@ -96,6 +96,14 @@ long double gxc_moonLat(long double t);
 int64_t suoN(long double jd);
 
 Vector2 nutation2(long double t);
+Vector2 nutation(long double t, long double zq);
+Vector3 CDnutation(Vector3 z, long double E, long double dL, long double dE);
+long double nutationLon2(long double t);
+long double prece(long double t, std::string sc, std::string mx);
+Vector3 CDllr_J2D(long double t, Vector3 llr, std::string mx);
+Vector3 CDllr_D2J(long double t, Vector3 llr, std::string mx);
+Vector3 HDllr_J2D(long double t, Vector3 llr, std::string mx);
+Vector3 HDllr_D2J(long double t, Vector3 llr, std::string mx);
 long double hcjj(long double t);
 Vector3 e_coord(long double t, int n1, int n2, int n3);
 Vector3 m_coord(long double t, int n1, int n2, int n3);

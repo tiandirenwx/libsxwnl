@@ -1,0 +1,11 @@
+{
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "寿星万年历入口模块",
+  "main": "",
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "libsxwnl_napi.so": "file:./src/main/cpp/types/libsxwnl_napi"
+  }
+}

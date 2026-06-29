@@ -1,6 +1,8 @@
 #include "day.h"
 #include "eph.h"
+#include "sx_lang_zh.h"
 #include <memory>
+#include <string>
 
 namespace sxtwl
 {
@@ -16,6 +18,7 @@ Day::Day(int d,long double jf)
     this->bdn = 0;
 
     this->lunar_total_days_ = 0;
+    this->lunar_month_idx_ = -1;
     this->solar_month_ = 0;
     this->jieling_ = -2;
     this->lunar_lichun_year_ = 0;
@@ -110,6 +113,9 @@ void Day::checkLunarData()
     this->cur_lq_ = int(this->d0 - vecZQ[15]); // 距立秋的天数
     this->cur_mz_ = int(this->d0 - vecZQ[11]); // 距芒种的天数
     this->cur_xs_ = int(this->d0 - vecZQ[13]); // 距小暑的天数
+
+    // 记录在 SSQ 表内的月序号, 节日模块用于查询下一月名
+    this->lunar_month_idx_ = mk;
 
     // 月的信息
     this->checkExtSolarData();
@@ -943,14 +949,153 @@ Day *Day::fromLunar(int year, uint8_t month, int day, bool isRun, bool isSpec)
     return getLunarDate(year,month,day,isRun,isSpec);
 }
 
+// 回历 (Y, M, D) → 儒略日 (J2000 起算)
+//
+// 正向算法见 checkMoslemData(), 这里是其严格反函数:
+//   设 Y' = Y-1, 则 z = Y'/30, y = Y' mod 30
+//   一个 30 年周期累计 10631 天
+//   y 年内累积天数 = int2(y * 354.366 + 0.5)
+//   M 月内累积天数 = int2((M-1) * 29.5 + 0.5)
+//   日内偏移 = D - 1
+// 最终: d_total = z*10631 + int2(y*354.366+0.5) + int2((M-1)*29.5+0.5) + (D-1)
+//        jd_day = d_total - 503105 (J2000 起算)
 Day *Day::fromMoslem(int _year, uint8_t _month, int _day)
 {
-    Time t{};
-    t.h = 12, t.m = 0, t.s = 0.1;
-    t.Y = _year;
-    t.M = _month;
-    t.D = _day;
-    auto d0 = int2(JD::toJD(t)) - J2000;
+    int yIdx = _year  - 1;
+    int mIdx = _month - 1;
+    int z = (yIdx >= 0) ? (yIdx / 30) : -((30 - 1 - yIdx) / 30);
+    int y = yIdx - z * 30;            // 始终落入 [0, 29]
 
+    long long d_total =
+        (long long)z * 10631LL
+        + (long long)int2(y * 354.366 + 0.5)
+        + (long long)int2(mIdx * 29.5 + 0.5)
+        + (long long)(_day - 1);
+
+    int d0 = (int)(d_total - 503105LL);
     return new Day(d0);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  数九/三伏/入梅/出梅 用到的距气天数 getter
+// ═══════════════════════════════════════════════════════════════
+int Day::getCurDz()
+{
+    this->checkLunarData();
+    return this->cur_dz_;
+}
+int Day::getCurXz()
+{
+    this->checkLunarData();
+    return this->cur_xz_;
+}
+int Day::getCurLq()
+{
+    this->checkLunarData();
+    return this->cur_lq_;
+}
+int Day::getCurMz()
+{
+    this->checkLunarData();
+    return this->cur_mz_;
+}
+int Day::getCurXs()
+{
+    this->checkLunarData();
+    return this->cur_xs_;
+}
+
+int Day::getLunarMonthDays()
+{
+    this->checkLunarData();
+    return this->lunar_total_days_;
+}
+
+// 下一阴历月是否为"正月" —— 直接查 SSQ.ym[mk+1]
+// 与上游 lunar.js 中 Lmc2 == '正' 等价
+bool Day::isNextLunarMonthZheng()
+{
+    this->checkLunarData();
+    SSQ &SSQPtr = SSQ::getInstance();
+    std::vector<int> vecYm = SSQPtr.getYm();
+    int next = this->lunar_month_idx_ + 1;
+    if (next < 0 || next >= (int)vecYm.size())
+    {
+        return false;
+    }
+    return vecYm[next] == 0; // SSQ.ym 中 0 即 '正'
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  节日聚合
+// ═══════════════════════════════════════════════════════════════
+festival::DayInfo Day::getFestivalInfo()
+{
+    if (festivals_cached_) return festivals_cached_value_;
+    festivals_cached_value_ = festival::computeAll(*this);
+    festivals_cached_       = true;
+    return festivals_cached_value_;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  派生显示字段 —— 与 sx_lang_zh.h 名称表一一对应, 单一事实源
+// ═══════════════════════════════════════════════════════════════
+std::string Day::getLunarMonthName()
+{
+    int idx = (int)this->getLunarMonth() - 1;
+    if (idx < 0 || idx >= 12) return {};
+    std::string s;
+    if (this->isLunarLeap()) s += "闰";
+    s += Ymc[idx];
+    s += "月";
+    return s;
+}
+
+std::string Day::getLunarDayName()
+{
+    int day = this->getLunarDay();
+    if (day < 1 || day > 30) return {};
+    return Rmc[day - 1];
+}
+
+std::string Day::getJieQiName()
+{
+    if (!this->hasJieQi()) return {};
+    int idx = this->getJieQi();
+    if (idx < 0 || idx >= 24) return {};
+    return Jqmc[idx];
+}
+
+std::string Day::getJieQiTimeStr()
+{
+    if (!this->hasJieQi()) return {};
+    return JD::timeStr(this->getJieQiJD());
+}
+
+std::string Day::getYueXiangName()
+{
+    if (!this->hasYueXiang()) return {};
+    int idx = this->getYueXiang();
+    if (idx < 0 || idx >= 4) return {};
+    return YueXiangName[idx];
+}
+
+std::string Day::getYueXiangTimeStr()
+{
+    if (!this->hasYueXiang()) return {};
+    return JD::timeStr(this->getYueXiangJD());
+}
+
+std::string Day::getConstellationName()
+{
+    int idx = this->getConstellation();
+    if (idx < 0 || idx >= 12) return {};
+    return std::string(XiZ[idx]) + "座";
+}
+
+std::string Day::getShengXiao()
+{
+    GZ y = this->getYearGZ(true);
+    if (y.dz >= 12) return {};
+    return ShengXiao[y.dz];
 }

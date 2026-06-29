@@ -110,6 +110,14 @@ public:
     std::vector<int> getEndYearList() const;
     std::string printBazi() const;
 
+    // ── 供派生命理分析(bazi_analysis)使用的原始数据 ──
+    // 四柱索引: [0]年干[1]年支[2]月干[3]月支[4]日干[5]日支[6]时干[7]时支
+    std::array<int, 8> getSiZhuIndex() const { return arraySiZhu_; }
+    int  getStartYear() const { return mJyYear_; }     // 起运/首个流年的公历年
+    int  getSolarYearOfBirth() const { return mSolarYear_; } // 出生公历年
+    bool getGenderIsFemale() const { return mGender_; } // true=女
+    int  getDaysAfterJie() const;                       // 出生距本月节令的天数
+
 private:
     void calcPingQiPaiPan();
     void calcDingQiPaiPan();

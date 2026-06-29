@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  寿星万年历 iOS 打包导出配置 (xcodebuild -exportArchive 用)
+
+  method 取值:
+    - development     真机内测 (默认, 适合 Ad-Hoc / 个人设备)
+    - app-store       App Store 上架
+    - ad-hoc          指定设备分发
+    - enterprise      企业证书分发
+-->
+<plist version="1.0">
+<dict>
+    <key>method</key>
+    <string>development</string>
+
+    <key>teamID</key>
+    <string>9TKPYKJA67</string>
+
+    <key>signingStyle</key>
+    <string>automatic</string>
+
+    <key>stripSwiftSymbols</key>
+    <true/>
+
+    <key>compileBitcode</key>
+    <false/>
+
+    <key>destination</key>
+    <string>export</string>
+
+    <key>uploadSymbols</key>
+    <false/>
+</dict>
+</plist>

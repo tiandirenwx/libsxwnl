@@ -202,6 +202,12 @@ public:
     inline Vector3 moon(long double jd) { return chazhi(jd, 1); }
     inline Vector3 bse(long double jd) { return chazhi(jd, 2); }
 
+    // Eclipse map API needs access to these geometric calculations
+    Vector3 bseXY2db(long double x, long double y, Vector3 I, bool f);
+    Vector3 bseM(long double jd);
+    _RSM rSM(long double mR);
+    Vector4 nanbei(Vector3 M, long double vx0, long double vy0, long double h, long double r, Vector3 I);
+
 private:
     EphRsgs();
     ~EphRsgs();
@@ -226,14 +232,8 @@ private:
     Vector3 cd2bse(Vector3 z, Vector3 I);
     Vector3 bse2cd(Vector3 z, Vector3 I);
     Vector3 bse2db(Vector3 z, Vector3 I, bool f);
-    Vector3 bseXY2db(long double x, long double y, Vector3 I, bool f);
-    Vector3 bseM(long double jd);
     _VXY Vxy(long double x, long double y, long double s, long double vx, long double vy);
-    _RSM rSM(long double mR);
     Vector3 qrd(long double jd, long double dx, long double dy, bool fs);
     void push(Vector3 z, std::vector<long double> &p);
-    Vector4 nanbei(Vector3 M, long double vx0, long double vy0, long double h, long double r, Vector3 I);
     bool mDian(Vector3 M, long double vx0, long double vy0, bool AB, long double r, Vector3 I, std::vector<long double> &A);
-    // static void __rsGS::elmCpy(std::vector<long double> &a,int n,std::vector<long double> b,int m);
-    // static void __rsGS::mQie(Vector3 M,long double vx0,long double vy0,long double h, long double r,Vector3 I, std::vector<long double> &A,_FLAG &FLAG);
 };

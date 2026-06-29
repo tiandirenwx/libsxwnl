@@ -3,9 +3,11 @@
 #include <cstdint>
 #include <algorithm>
 #include <vector>
+#include <string>
 #include "JD.h"
 #include "const.h"
 #include "SSQ.h"
+#include "festival_zh.h"
 
 //static SSQ SSQPtr;
 
@@ -35,7 +37,8 @@ private:
     uint8_t moslem_month_; //回历月
     int moslem_day_;       //回历日
 
-    int lunar_month_;           //阴历月的月
+    int lunar_month_;           //阴历月的月名索引(SSQ.ym 中的值, 0=正 1=二 ... 11=腊)
+    int lunar_month_idx_;       //阴历月在 SSQ 表内的序号(mk), -1 = 未计算
     uint8_t lunar_day_;         //阴历月的日
     int lunar_total_days_;      //该阴历月的总天数
     bool is_lunar_leap_month_;  //是不是阴历的润月
@@ -69,6 +72,10 @@ private:
     
     GZ *gz_month_; //月天干地支
     GZ *gz_day_;   // 日天干地支
+
+    // 节日聚合缓存
+    bool                festivals_cached_ = false;
+    festival::DayInfo   festivals_cached_value_;
 
 private:
     explicit Day(int d,long double jf = 0);
@@ -133,6 +140,33 @@ public:
     long double getJieQiJD();
     // 获取星座
     uint8_t  getConstellation();
+
+    // ── 数九/三伏/入梅/出梅 用到的距气天数 ──
+    int getCurDz();  // 距冬至天数(负数表示尚未到)
+    int getCurXz();  // 距夏至
+    int getCurLq();  // 距立秋
+    int getCurMz();  // 距芒种
+    int getCurXs();  // 距小暑
+
+    // 当前阴历月的总天数(29 或 30)
+    int getLunarMonthDays();
+
+    // 下一阴历月是否为"正月"(除夕/小年判定)
+    bool isNextLunarMonthZheng();
+
+    // ── 节日 ──
+    // 计算并返回该日完整节日聚合 (首次调用后缓存)
+    festival::DayInfo getFestivalInfo();
+
+    // ── 派生显示字段(单一事实源, 各上层模块/UI 直接复用) ──
+    std::string getLunarMonthName();   // "正月"/"闰二月"
+    std::string getLunarDayName();     // "初一".."三十"
+    std::string getJieQiName();        // "" 或 "冬至"
+    std::string getJieQiTimeStr();     // "" 或 "HH:MM:SS"
+    std::string getYueXiangName();     // "" 或 "朔/上弦/望/下弦"
+    std::string getYueXiangTimeStr();  // "" 或 "HH:MM:SS"
+    std::string getConstellationName();// "白羊座"
+    std::string getShengXiao();        // "马"
 
 
 public:
