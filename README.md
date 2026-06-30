@@ -39,6 +39,7 @@ libsxwnl/
 ├── capi/                   # 统一 C API（三端共用）
 │   ├── sxwnl_capi.h        # 头文件
 │   └── sxwnl_capi.cpp      # 实现
+├── assets/bazi/            # 八字页共享资源 (字体/生肖图, 三端编译时自动链接)
 ├── harmony/                # 鸿蒙 App (ArkTS / ArkUI)
 ├── android/                # Android App (Kotlin / Compose) → 见 android/README.md
 ├── ios/                    # iOS App (SwiftUI)            → 见 ios/README.md

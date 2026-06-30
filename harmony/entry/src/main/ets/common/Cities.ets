@@ -1,12 +1,13 @@
-// 出生地经纬度数据 (源自寿星天文历 JWv 压缩字符串)
+// 出生地经纬度数据 — 薄包装 NativeBridge.geoXxx()
 //
-// 数据规模: 32 个省级行政区, 每个 30-200 个地级市/区县, 合计 ~3500 条
-// 第一级 = 省/直辖市/特别行政区, 第二级 = 城市/区县
-// 八字计算只取经纬度, 时区一律按北京时间(UT+8) 处理
+// 数据来源: libsxwnl C++ 层的 GeoPostion 单例 (src/geo.cpp 中的 JWv).
+// 本文件不再持有任何硬编码城市表; 上层 (BaziPage / CityPickerDialog /
+// EclipsePage / EclipseComponents) 可继续使用 Cities.REGIONS / DEFAULT /
+// PRESET 等既有静态 API, 与跨端 native 库的目录数据自动保持同步.
 //
-// 与 Android `Cities.kt` / iOS `Cities.swift` 字段结构对齐
+// 与 Android `Cities.kt` / iOS `Cities.swift` 字段结构对齐.
 
-import { JWV_RAW } from './JWVRaw'
+import { GeoCity, GeoProvince, NativeBridge } from '../services/NativeBridge'
 
 export interface ObserverCity {
   name: string
@@ -21,64 +22,46 @@ export interface Region {
   cities: ObserverCity[]
 }
 
-interface JWPair {
-  lon: number
-  lat: number
-}
-
-// 单字符 base62 解码: '0'-'9' = 0-9, 'A'-'Z' = 10-35, 'a'-'z' = 36-61
-function decodeCh(c: number): number {
-  if (c > 96) return c - (97 - 36)
-  if (c > 64) return c - (65 - 10)
-  return c - 48
-}
-
-// 4 字符压缩串 → 经纬度 (度): [纬度度, 纬度分, 经度度-73, 经度分]
-function decodeJW(code: string): JWPair {
-  const c0: number = decodeCh(code.charCodeAt(0))
-  const c1: number = decodeCh(code.charCodeAt(1))
-  const c2: number = decodeCh(code.charCodeAt(2))
-  const c3: number = decodeCh(code.charCodeAt(3))
-  const pair: JWPair = {
-    lon: c2 + c3 / 60.0 + 73.0,
-    lat: c0 + c1 / 60.0
+function toObserverCity(c: GeoCity): ObserverCity {
+  return {
+    name: c.district,
+    longitude: c.longitude,
+    latitude: c.latitude,
+    tzHours: c.timezone,
   }
-  return pair
 }
 
-function buildRegions(): Region[] {
+function loadRegions(): Region[] {
   const out: Region[] = []
-  for (const raw of JWV_RAW) {
-    const parts: string[] = raw.split(' ')
-    if (parts.length < 2) continue
-    const regionName: string = parts[0]
+  const provinces: GeoProvince[] = NativeBridge.geoListProvinces()
+  for (let i = 0; i < provinces.length; i++) {
+    const pname: string = provinces[i].province
+    const raw: GeoCity[] = NativeBridge.geoListCities(pname)
+    if (raw.length === 0) continue
     const cities: ObserverCity[] = []
-    for (let i = 1; i < parts.length; i++) {
-      const entry: string = parts[i]
-      if (entry.length < 5) continue
-      const pair: JWPair = decodeJW(entry.substring(0, 4))
-      const city: ObserverCity = {
-        name: entry.substring(4),
-        longitude: pair.lon,
-        latitude: pair.lat,
-        tzHours: 8
-      }
-      cities.push(city)
-    }
-    if (cities.length > 0) {
-      const region: Region = { name: regionName, cities: cities }
-      out.push(region)
-    }
+    for (let k = 0; k < raw.length; k++) cities.push(toObserverCity(raw[k]))
+    out.push({ name: pname, cities: cities })
   }
   return out
 }
 
+// 兜底默认 (NAPI 完全不可用时, 防止下游因空数组解引用崩溃)
+const FALLBACK: ObserverCity = {
+  name: '天安门', longitude: 116.3833, latitude: 39.9, tzHours: 8,
+}
+
+// ── 静态目录 (整个 App 共享一次性加载结果) ──────────────
+// libsxwnl 是 in-process native, 一次性拉 32 省 × ~100 城市约 50ms,
+// 之后的所有访问都是普通对象索引, 不再触发 NAPI.
+const REGIONS: Region[] = loadRegions()
+const DEFAULT: ObserverCity =
+  REGIONS.length > 0 && REGIONS[0].cities.length > 0 ? REGIONS[0].cities[0] : FALLBACK
+const PRESET: ObserverCity[] =
+  REGIONS.length > 0 ? REGIONS[0].cities.slice(0, 30) : [DEFAULT]
+
 export class Cities {
-  static readonly REGIONS: Region[] = buildRegions()
-
-  // 默认北京天安门
-  static readonly DEFAULT: ObserverCity = Cities.REGIONS[0].cities[0]
-
-  // 旧版兼容: 扁平预设(供日食观测点快速选择条等模块使用), 取首批 30 个 JWv 内置项
-  static readonly PRESET: ObserverCity[] = Cities.REGIONS[0].cities.slice(0, 30)
+  static readonly REGIONS: Region[] = REGIONS
+  static readonly DEFAULT: ObserverCity = DEFAULT
+  // 旧版兼容: 扁平预设 (供日食观测点快速选择条等模块使用), 取首批 30 个 JWv 内置项
+  static readonly PRESET: ObserverCity[] = PRESET
 }

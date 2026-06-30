@@ -40,12 +40,24 @@ void Util::extractParts(const std::string &s, std::string &alphanumeric, std::st
     alphanumeric.clear();
     chinese.clear();
 
-    for (char c : s) {
-        if (std::isalnum(c)) {
-            alphanumeric += c;
-        } else if (isChinese(c)) {
-            chinese += c;
+    // 注意: JWv 字符串是 UTF-8 编码的, 不能逐 char 判断 (高位字节会被符号扩展
+    // 成负数, 导致 isChinese 永远返回 false). 这里按 UTF-8 首字节确定字符长度,
+    // 把整段非 ASCII 字节直接当作"中文"附加到 chinese.
+    size_t i = 0;
+    while (i < s.size()) {
+        unsigned char c = static_cast<unsigned char>(s[i]);
+        if (c < 0x80) {
+            if (std::isalnum(c)) alphanumeric += static_cast<char>(c);
+            ++i;
+            continue;
         }
+        int len = 1;
+        if      ((c & 0xE0u) == 0xC0u) len = 2;
+        else if ((c & 0xF0u) == 0xE0u) len = 3;
+        else if ((c & 0xF8u) == 0xF0u) len = 4;
+        if (i + static_cast<size_t>(len) > s.size()) break; // 防越界
+        chinese.append(s, i, len);
+        i += static_cast<size_t>(len);
     }
 }
 

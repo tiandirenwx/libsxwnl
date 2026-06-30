@@ -1,8 +1,12 @@
 package com.sxwnl.calendar.bridge
 
+import com.sxwnl.calendar.data.AlmanacTopic
 import com.sxwnl.calendar.data.BaziColumn
+import com.sxwnl.calendar.data.DayAlmanac
 import com.sxwnl.calendar.data.DayInfo
 import com.sxwnl.calendar.data.DayRTS
+import com.sxwnl.calendar.data.GeoCity
+import com.sxwnl.calendar.data.GeoProvince
 import com.sxwnl.calendar.data.JieQiItem
 import com.sxwnl.calendar.data.LiuNianItem
 import com.sxwnl.calendar.data.LocalSolarEclipse
@@ -12,6 +16,7 @@ import com.sxwnl.calendar.data.LunarMonth
 import com.sxwnl.calendar.data.ReverseItem
 import com.sxwnl.calendar.data.SolarEclipseItem
 import com.sxwnl.calendar.data.SolarEclipsePath
+import com.sxwnl.calendar.data.TimezoneGroup
 import com.sxwnl.calendar.data.YearCalMonth
 
 /**
@@ -140,6 +145,24 @@ object SxwnlNative {
 
     /** idx=1 → ditu1 大图海岸; idx=2 → ditu2 国界 */
     @JvmStatic external fun getWorldMapData(idx: Int): DoubleArray?
+
+    // ═══ 老黄历 (Almanac) ═════════════════════════════════════
+
+    /** 取公历某日老黄历 (二十八宿/黄道黑道/冲煞/方位/彭祖/神煞/宜忌/吉时/用事). */
+    @JvmStatic external fun getAlmanac(year: Int, month: Int, day: Int): DayAlmanac?
+
+    /** 老黄历静态知识 (董公总论/口诀/方位 等, 全局只取一次). */
+    @JvmStatic external fun getAlmanacTopics(): Array<AlmanacTopic>?
+
+    // ═══ 地理目录 (GeoPostion + JWv/SQv) ══════════════════════
+    //
+    //   数据完全来自 libsxwnl C++ 内部 (src/geo.cpp), 上层无需维护城市表.
+
+    @JvmStatic external fun geoListProvinces(): Array<GeoProvince>?
+    @JvmStatic external fun geoListCities(province: String): Array<GeoCity>?
+    @JvmStatic external fun geoSearch(keyword: String, limit: Int): Array<GeoCity>?
+    @JvmStatic external fun geoListTimezones(): Array<TimezoneGroup>?
+    @JvmStatic external fun geoDefault(): GeoCity?
 
     // ═══ 纪年字符串工具 ═══════════════════════════════════════
 

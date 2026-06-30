@@ -175,11 +175,16 @@ export interface ReverseItem {
   hourGZ: string
 }
 
+// 节气表条目: 与 NAPI (napi_calendar.cpp:NapiGetJieQiList) 实际返回字段
+//   完全一致 — idx 是全年节气序号 (0..23), solarMonth/solarDay 是公历日期.
+//   注意: 历史上此接口曾写成 {name, time, month, day}, 但 NAPI 从未返回 month/day,
+//   只输出 solarMonth/solarDay; 类型撒谎会让 UI 收到 undefined.
 export interface JieQiItem {
+  idx: number
+  solarMonth: number
+  solarDay: number
   name: string
   time: string
-  month: number
-  day: number
 }
 
 export interface SolarDate {
@@ -298,6 +303,97 @@ export interface LunarEclipseDetail {
   tP4: number   // 半影食终
 }
 
+// ── 老黄历 (Almanac): 二十八宿 / 黄道黑道 / 冲煞 / 方位 / 彭祖 ─
+
+// 择日典籍语录 (董公择日要诀 / 玉匣记 / 通胜经 ... 可扩展)
+export interface AlmanacQuote {
+  source: string          // 典籍来源 "董公择日要诀"
+  title: string           // 段标题   "正月·开子日"
+  luck: string            // 整体基调 "吉"/"凶"/"平"/"混"/""
+  body: string            // 原文
+}
+
+export interface DayAlmanac {
+  xiu: string             // 二十八宿宿名 "角"
+  xiuZheng: string        // 七政 "木"
+  xiuAnimal: string       // 动物 "蛟"
+  xiuLuck: string         // "吉" / "凶"
+  xiuGong: string         // 四象 "东" (东青龙/南朱雀/西白虎/北玄武)
+
+  twelveGod: string       // 12 神值日 "青龙"
+  huangHei: string        // "黄道" / "黑道"
+  isHuangDao: boolean
+
+  chongShengXiao: string  // 冲生肖 "马"
+  chongGanZhi: string     // 冲日干支 "戊午"
+  sha: string             // 煞方位 "南"
+
+  xiShenFang: string      // 喜神方位
+  yangGuiFang: string     // 阳贵神
+  yinGuiFang: string      // 阴贵神
+  fuShenFang: string      // 福神
+  caiShenFang: string     // 财神
+
+  pengZuGan: string       // "甲不开仓 财物耗散"
+  pengZuZhi: string       // "子不问卜 自惹祸殃"
+
+  quotes: AlmanacQuote[]  // 择日典籍语录 (董公择日要诀等)
+  shenSha: ShenSha[]      // 神煞 (吉/凶, 按权重排序)
+  yi: string[]            // 宜事 (神煞投票后聚合)
+  ji: string[]            // 忌事
+  luckyHours: LuckyHour[] // 吉曜时法 (5吉时 + 2贵人时)
+  events: EventAdvice[]   // 用事择吉 (动土/竖柱/上梁/...)
+  notes: string[]         // 节气/月度特别提示
+}
+
+// ── 神煞 ──
+export interface ShenSha {
+  name: string            // "天德"/"月厌大祸"
+  isLucky: boolean        // 吉神=true / 凶神=false
+  weight: number          // 1-3 (1一般, 2中, 3大煞)
+}
+
+// ── 吉时 ──
+export interface LuckyHour {
+  name: string            // "福德"/"凤辇"/"贵人(阳)"
+  zhi: number             // 0..11
+}
+
+// ── 用事择吉建议 ──
+export interface EventAdvice {
+  event: string           // "动土"/"上梁"/"安床"
+  suitable: boolean       // 是否适合
+  reason: string          // 一句话理由
+}
+
+// ── 静态知识 (董公总论/口诀/方位 等) ──
+export interface AlmanacTopic {
+  category: string        // "总论"/"基础理论"/"建筑"/"口诀"/"方位"
+  title: string
+  body: string
+}
+
+// ── 地理目录 (来自 src/geo.cpp 的 JWv / SQv) ──────────────
+export interface GeoProvince {
+  province: string        // "北京市"/"福建省"/...
+  cityCount: number
+}
+
+export interface GeoCity {
+  province: string        // "北京市"
+  district: string        // "天安门"
+  longitude: number       // 度, 东+ 西-
+  latitude: number        // 度, 北+ 南-
+  timezone: number        // 小时, 东+ 西-
+}
+
+export interface TimezoneGroup {
+  continent: string       // "亚洲"/"欧洲"/...
+  country: string         // "日本"/"加拿大东部时区"/...
+  timezone: number        // 标准时偏移(小时)
+  cities: string[]        // 代表城市名
+}
+
 // ── 日月升降/中天 (单天, 对应 JS SZJ.calcRTS) ─────────────
 export interface DayRTS {
   sunRise: string       // 日出 HH:MM:SS
@@ -374,6 +470,46 @@ export class NativeBridge {
     longitude: number, latitude: number, tzHours: number): DayRTS | null {
     const r = sxwnl.calcDayRTS(year, month, day, longitude, latitude, tzHours)
     return r === null ? null : r as DayRTS
+  }
+
+  // 老黄历: 二十八宿 / 黄道黑道 / 冲煞 / 五吉神方位 / 彭祖百忌 /
+  //   董公择日要诀语录 / 35+神煞 / 宜忌 / 吉曜时法 / 用事择吉 / 节气提示
+  static getAlmanac(year: number, month: number, day: number): DayAlmanac | null {
+    const r = sxwnl.getAlmanac(year, month, day)
+    return r === null ? null : r as DayAlmanac
+  }
+
+  // 老黄历静态知识 (董公总论/各章口诀/方位 等, 与日历无关, 一次加载常驻)
+  static getAlmanacTopics(): AlmanacTopic[] {
+    const r = sxwnl.getAlmanacTopics()
+    return r === null ? [] : (r as AlmanacTopic[])
+  }
+
+  // ── 地理目录 (薄包装 C++ GeoPostion) ─────────────────────
+  //
+  // 数据来源: libsxwnl 内部 src/geo.cpp 的 JWv (国内 32 省 ≈ 4000+ 市县)
+  // + SQv (国际时区). 上层无需重复维护. 所有方法都是一次性目录查询,
+  // 适合做选择器, 不在热路径里调用.
+
+  static geoListProvinces(): GeoProvince[] {
+    return (sxwnl.geoListProvinces() ?? []) as GeoProvince[]
+  }
+
+  static geoListCities(province: string): GeoCity[] {
+    return (sxwnl.geoListCities(province) ?? []) as GeoCity[]
+  }
+
+  static geoSearch(keyword: string, limit: number = 64): GeoCity[] {
+    return (sxwnl.geoSearch(keyword, limit) ?? []) as GeoCity[]
+  }
+
+  static geoListTimezones(): TimezoneGroup[] {
+    return (sxwnl.geoListTimezones() ?? []) as TimezoneGroup[]
+  }
+
+  static geoDefault(): GeoCity | null {
+    const r = sxwnl.geoDefault()
+    return r === null ? null : r as GeoCity
   }
 
   // ── 日月食 (结构化, 用于可视化) ─────────────────────────

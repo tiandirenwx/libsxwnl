@@ -34,8 +34,10 @@ export struct EclipsePage {
   @State loading: boolean = false
   @State searched: boolean = false
 
-  @State showSolar: boolean = false
-  @State showLunar: boolean = false
+  // ArkTS 规则下同一组件只能挂一个 bindSheet, 用 sheetMode 复用同一容器.
+  //   sheetMode='solar' 显示日食详情; 'lunar' 显示月食详情.
+  @State showSheet: boolean = false
+  @State sheetMode: string = 'solar'
   @State solarSelected: SolarEclipseItem | null = null
   @State lunarSelected: LunarEclipseItem | null = null
 
@@ -71,16 +73,23 @@ export struct EclipsePage {
     }
     .width('100%').height('100%').backgroundColor(AppColors.BACKGROUND)
     .scrollBar(BarState.Auto)
-    .bindSheet($$this.showSolar, this.solarSheet(), {
+    .bindSheet($$this.showSheet, this.detailSheetBuilder(), {
       height: SheetSize.LARGE, dragBar: true,
-      title: { title: '日食详情' },
-      onDisappear: () => { this.solarSelected = null }
+      title: { title: this.sheetMode === 'lunar' ? '月食详情' : '日食详情' },
+      onDisappear: (): void => {
+        this.solarSelected = null
+        this.lunarSelected = null
+      }
     })
-    .bindSheet($$this.showLunar, this.lunarSheet(), {
-      height: SheetSize.LARGE, dragBar: true,
-      title: { title: '月食详情' },
-      onDisappear: () => { this.lunarSelected = null }
-    })
+  }
+
+  @Builder
+  detailSheetBuilder() {
+    if (this.sheetMode === 'lunar') {
+      this.lunarSheet()
+    } else {
+      this.solarSheet()
+    }
   }
 
   @Builder headerBanner() {
@@ -205,7 +214,12 @@ export struct EclipsePage {
     .width('100%').padding(AppDimens.PADDING_MD)
     .backgroundColor(AppColors.SURFACE).borderRadius(AppDimens.BORDER_RADIUS_MD)
     .shadow({ radius: 4, color: AppColors.CARD_SHADOW_COLOR, offsetY: 1 })
-    .onClick(() => { this.solarSelected = item; this.showSolar = true })
+    .onClick(() => {
+      this.solarSelected = item
+      this.lunarSelected = null
+      this.sheetMode = 'solar'
+      this.showSheet = true
+    })
   }
 
   @Builder lunarCard(item: LunarEclipseItem) {
@@ -245,7 +259,12 @@ export struct EclipsePage {
     .width('100%').padding(AppDimens.PADDING_MD)
     .backgroundColor(AppColors.SURFACE).borderRadius(AppDimens.BORDER_RADIUS_MD)
     .shadow({ radius: 4, color: AppColors.CARD_SHADOW_COLOR, offsetY: 1 })
-    .onClick(() => { this.lunarSelected = item; this.showLunar = true })
+    .onClick(() => {
+      this.lunarSelected = item
+      this.solarSelected = null
+      this.sheetMode = 'lunar'
+      this.showSheet = true
+    })
   }
 
   // ─── Solar Sheet ────────────────────────────────────────

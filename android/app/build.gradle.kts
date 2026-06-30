@@ -5,11 +5,24 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// 编译前链接 assets/bazi/ 共享资源 (字体/生肖图/宣纸背景)
+val repoRoot = rootProject.projectDir.parentFile!!
+tasks.register<Exec>("syncBaziAssets") {
+    workingDir(repoRoot)
+    commandLine("bash", "scripts/sync_bazi_assets.sh", "android")
+}
+tasks.named("preBuild") { dependsOn("syncBaziAssets") }
+
 // ── 读取签名配置 (优先级: keystore.properties > 环境变量 > debug.keystore) ──
 val keystoreProps = Properties().apply {
     val f = rootProject.file("keystore.properties")
     if (f.exists()) f.inputStream().use { load(it) }
 }
+
+// 是否找到了真正的正式签名 (任意一种来源即可)
+val hasReleaseKeystore: Boolean =
+    keystoreProps.getProperty("storeFile") != null ||
+        System.getenv("SXWNL_KEYSTORE_PATH") != null
 
 fun resolveStoreFile(): java.io.File {
     keystoreProps.getProperty("storeFile")?.let { return rootProject.file(it) }
@@ -75,6 +88,33 @@ android {
                 "proguard-rules.pro"
             )
             signingConfig = signingConfigs.getByName("release")
+        }
+    }
+
+    // ── 签名状态自检: 在配置阶段就把当前要用的 keystore 打印出来 ──
+    // 同时, 如果要打 release 包却没有正式 keystore, 给出非常醒目的警告.
+    gradle.taskGraph.whenReady {
+        val ksFile = resolveStoreFile()
+        val isReleaseBuild = allTasks.any {
+            val n = it.name.lowercase()
+            n.contains("release") && (n.startsWith("assemble") || n.startsWith("bundle"))
+        }
+        if (isReleaseBuild) {
+            if (hasReleaseKeystore) {
+                logger.lifecycle("[sxwnl] release 签名: ${ksFile.absolutePath} (alias=${resolveKeyAlias()})")
+            } else {
+                logger.warn("")
+                logger.warn("╔═══════════════════════════════════════════════════════════════╗")
+                logger.warn("║  [sxwnl] !! 警告: 正在用 debug.keystore 给 release 包签名 !!   ║")
+                logger.warn("║                                                                ║")
+                logger.warn("║  - 该包不可上架任何应用商店                                    ║")
+                logger.warn("║  - 国产 ROM (小米/华为/OPPO/vivo) 可能直接拦截或卸载           ║")
+                logger.warn("║  - 后续若换成正式签名, 用户必须卸载重装 (无法覆盖升级)         ║")
+                logger.warn("║                                                                ║")
+                logger.warn("║  生成正式 keystore: scripts/gen_android_keystore.sh            ║")
+                logger.warn("╚═══════════════════════════════════════════════════════════════╝")
+                logger.warn("")
+            }
         }
     }
 

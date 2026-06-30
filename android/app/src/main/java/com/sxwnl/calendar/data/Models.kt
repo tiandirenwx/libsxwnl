@@ -34,9 +34,11 @@ data class DayInfo @JvmOverloads constructor(
     var constellation: Int = 0,
     var jian12: Int = 0,
 
-    var yearGz: String = "",
-    var monthGz: String = "",
-    var dayGz: String = "",
+    // 命名: yearGZ/monthGZ/dayGZ (大写 GZ) — 与 NAPI/iOS 字段保持一致, JNI
+    //   会同名设置. 历史曾用 yearGz, 已统一.
+    var yearGZ: String = "",
+    var monthGZ: String = "",
+    var dayGZ: String = "",
     var lunarMonthName: String = "",
     var lunarDayName: String = "",
     var jieQiName: String = "",
@@ -202,9 +204,14 @@ class BaziResult @JvmOverloads constructor(
     var currentLiuNian: BaziColumn? = null,
     var daYunColumns: List<BaziColumn> = emptyList(),
     var wuXingCount: IntArray = IntArray(5),
-    var wuXingStatus: Array<String> = arrayOf("", "", "", "", ""),
+    var     wuXingStatus: Array<String> = arrayOf("", "", "", "", ""),
     var siLing: String = "",
-    var liuNian: List<LiuNianItem> = emptyList()
+    var liuNian: List<LiuNianItem> = emptyList(),
+
+    // 按大运分组的流年: 与 daYunColumns 一一对应, 每桶 10 个流年.
+    //  对齐鸿蒙 NAPI 返回字段 (napi_bazi.cpp: result.v("liuNianAll", allLn)).
+    //  rendering 时直接 daYunColumns[i] ↔ liuNianAll[i] 对应展开即可.
+    var liuNianAll: List<List<LiuNianItem>> = emptyList()
 )
 
 // ─── 八字输入参数 ───────────────────────────────────────────────
@@ -224,4 +231,97 @@ data class BaziParams @JvmOverloads constructor(
     var minute: Int = 0,
     var isLeap: Boolean = false,
     var isSpec: Boolean = false
+)
+
+// ─── 老黄历 (Almanac) — 与鸿蒙 DayAlmanac 一致 ──────────────────
+
+/** 择日典籍语录 (董公择日要诀 / 玉匣记 / 通胜经 ...) */
+data class AlmanacQuote @JvmOverloads constructor(
+    var source: String = "",            // 典籍来源
+    var title: String = "",             // 段标题
+    var luck: String = "",              // "吉"/"凶"/"平"/"混"/""
+    var body: String = ""               // 原文
+)
+
+/** 神煞 (天德/月厌大祸/三合 ...) */
+data class ShenSha @JvmOverloads constructor(
+    var name: String = "",
+    var isLucky: Boolean = true,
+    var weight: Int = 1                 // 1一般 2中 3大煞
+)
+
+/** 吉时 */
+data class LuckyHour @JvmOverloads constructor(
+    var name: String = "",              // "福德"/"凤辇"/"贵人(阳)"
+    var zhi: Int = 0                    // 0..11
+)
+
+/** 用事择吉建议 */
+data class EventAdvice @JvmOverloads constructor(
+    var event: String = "",             // "动土"/"上梁"/"安床" ...
+    var suitable: Boolean = false,
+    var reason: String = ""
+)
+
+/** 单日老黄历完整数据 */
+data class DayAlmanac @JvmOverloads constructor(
+    var xiu: String = "",
+    var xiuZheng: String = "",
+    var xiuAnimal: String = "",
+    var xiuLuck: String = "",
+    var xiuGong: String = "",
+
+    var twelveGod: String = "",
+    var huangHei: String = "",
+    var isHuangDao: Boolean = false,
+
+    var chongShengXiao: String = "",
+    var chongGanZhi: String = "",
+    var sha: String = "",
+
+    var xiShenFang: String = "",
+    var yangGuiFang: String = "",
+    var yinGuiFang: String = "",
+    var fuShenFang: String = "",
+    var caiShenFang: String = "",
+
+    var pengZuGan: String = "",
+    var pengZuZhi: String = "",
+
+    var quotes: Array<AlmanacQuote> = emptyArray(),
+    var shenSha: Array<ShenSha> = emptyArray(),
+    var yi: Array<String> = emptyArray(),
+    var ji: Array<String> = emptyArray(),
+    var luckyHours: Array<LuckyHour> = emptyArray(),
+    var events: Array<EventAdvice> = emptyArray(),
+    var notes: Array<String> = emptyArray()
+)
+
+/** 静态知识 (董公总论/口诀/方位 等) */
+data class AlmanacTopic @JvmOverloads constructor(
+    var category: String = "",          // "总论"/"基础理论"/"建筑"/"口诀"/"方位"
+    var title: String = "",
+    var body: String = ""
+)
+
+// ─── 地理目录 (省/市 + 国际时区) — 与鸿蒙 GeoCity 一致 ───────────
+
+data class GeoProvince @JvmOverloads constructor(
+    var province: String = "",
+    var cityCount: Int = 0
+)
+
+data class GeoCity @JvmOverloads constructor(
+    var province: String = "",
+    var district: String = "",
+    var longitude: Double = 0.0,
+    var latitude: Double = 0.0,
+    var timezone: Double = 8.0
+)
+
+data class TimezoneGroup @JvmOverloads constructor(
+    var continent: String = "",
+    var country: String = "",
+    var timezone: Double = 0.0,
+    var cities: Array<String> = emptyArray()
 )

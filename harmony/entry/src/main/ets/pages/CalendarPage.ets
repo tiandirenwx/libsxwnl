@@ -1,6 +1,9 @@
 import { AppColors, AppDimens, WEEK_NAMES } from '../common/Constants'
 import { YearUtil } from '../common/YearUtil'
-import { NativeBridge, DayInfo, DayRTS } from '../services/NativeBridge'
+import { NativeBridge, DayInfo, DayRTS, DayAlmanac, AlmanacTopic,
+         GeoProvince, GeoCity, TimezoneGroup } from '../services/NativeBridge'
+import { AlmanacInlineRow, AlmanacSheet, AlmanacTopicsSheet } from '../components/AlmanacComponents'
+import { Location, getDefaultLocation, formatLonLat, formatTimezone } from '../common/Locations'
 
 // 月相事件 / 节气事件 (用于月历底部摘要)
 interface MonthEvent {
@@ -37,13 +40,190 @@ export struct CalendarPage {
   @State moonEvents: MonthEvent[] = []   // 当月朔/望/上弦/下弦
   @State jieQiEvents: MonthEvent[] = []  // 当月节气
 
-  // 站点参数 (默认北京)
-  private siteLon: number = 116.3833
-  private siteLat: number = 39.9
-  private siteTz: number = 8
+  // ── 顶栏地点选择 (对应 JS 原版 Sel1/Sel2 国内 + Sel_zhou/Sel_dq 国际) ──
+  //
+  //   国内省市切换: 改变 location (经纬度+时区) → 日月升降跟着重算
+  //   国际洲国切换: 仅用于顶栏"外地实时时间"显示, 不影响日历主时区
+  //                 (与 JS 版本一致, 日月升降固定按本地系统时区)
+  @State location: Location = getDefaultLocation()
+  @State provinces: GeoProvince[] = []
+  @State cities: GeoCity[] = []           // 当前省下城市
+  @State provIdx: number = 0
+  @State cityIdx: number = 0
+  @State provOpts: SelectOption[] = []    // 省 SelectOption 缓存 (避免 build 内 map)
+  @State cityOpts: SelectOption[] = []
+
+  @State continents: string[] = []
+  @State countries: TimezoneGroup[] = []  // 当前洲下国家
+  @State contIdx: number = 0
+  @State countryIdx: number = 0
+  @State contOpts: SelectOption[] = []
+  @State countryOpts: SelectOption[] = []
+  private allTzGroups: TimezoneGroup[] = []
+
+  // 双时钟 (每秒刷新)
+  @State localClock: string = ''          // 本地系统时区当前时间
+  @State intlClock: string = ''           // 选中国际时区当前时间
+  private clockTimer: number = -1
+
+  // ── 老黄历 (按需懒加载, 浮层中显示摘要, 抽屉中显示全量) ──
+  // popupAlmanacKey 与 popupKey 对齐, 用于缓存"当前展开浮层"的老黄历摘要,
+  // 避免每次重绘都跨 JNI 调用.
+  @State popupAlmanacKey: string = ''
+  @State popupAlmanac: DayAlmanac | null = null
+
+  // 抽屉态: 当 sheetDay 非空时 bindSheet 显示, 关闭后清空
+  //   sheetMode: 'almanac' 显示当日老黄历; 'topics' 显示静态知识(董公总论/口诀);
+  //              'location' 城市选择
+  //   ArkTS 规则下同一组件只能挂一个 bindSheet, 所以用 mode 复用同一 sheet 容器.
+  @State sheetDay: DayInfo | null = null
+  @State sheetAlmanac: DayAlmanac | null = null
+  @State sheetVisible: boolean = false
+  @State sheetMode: string = 'almanac'   // 'almanac' | 'topics'
+
+  // 静态知识 (董公总论/口诀/方位) — 全局只取一次, 常驻内存
+  @State topics: AlmanacTopic[] = []
 
   aboutToAppear() {
+    this.initTopBars()
     this.loadMonthData()
+    this.tickClock()
+    // ArkTS 全局 setInterval 返回 number, 用于稍后清理
+    this.clockTimer = setInterval((): void => { this.tickClock() }, 1000)
+  }
+
+  aboutToDisappear() {
+    if (this.clockTimer >= 0) {
+      clearInterval(this.clockTimer)
+      this.clockTimer = -1
+    }
+  }
+
+  // ── 顶栏数据初始化 ──────────────────────────────────────
+  initTopBars() {
+    this.provinces = NativeBridge.geoListProvinces()
+    const popts: SelectOption[] = []
+    for (let i = 0; i < this.provinces.length; i++) popts.push({ value: this.provinces[i].province })
+    this.provOpts = popts
+
+    // 默认匹配 location 当前值 (getDefaultLocation 一般为北京·天安门)
+    let pIdx = 0
+    for (let i = 0; i < this.provinces.length; i++) {
+      if (this.provinces[i].province === this.location.province) { pIdx = i; break }
+    }
+    this.provIdx = pIdx
+    this.loadCitiesOfProv(pIdx, true)
+    let cIdx = 0
+    for (let i = 0; i < this.cities.length; i++) {
+      if (this.cities[i].district === this.location.district) { cIdx = i; break }
+    }
+    this.cityIdx = cIdx
+    if (this.cities.length > 0) this.location = this.cities[cIdx]
+
+    this.allTzGroups = NativeBridge.geoListTimezones()
+    const conts: string[] = []
+    const seen: Set<string> = new Set<string>()
+    for (let i = 0; i < this.allTzGroups.length; i++) {
+      const c = this.allTzGroups[i].continent
+      if (!seen.has(c)) {
+        seen.add(c)
+        conts.push(c)
+      }
+    }
+    this.continents = conts
+    const copts: SelectOption[] = []
+    for (let i = 0; i < conts.length; i++) copts.push({ value: conts[i] })
+    this.contOpts = copts
+
+    // 默认选"亚洲·中国"以匹配本地体验
+    let defaultCont = 0
+    for (let i = 0; i < conts.length; i++) {
+      if (conts[i] === '亚洲') { defaultCont = i; break }
+    }
+    this.contIdx = defaultCont
+    this.filterCountries(this.continents[this.contIdx])
+    let defaultCountry = 0
+    for (let i = 0; i < this.countries.length; i++) {
+      if (this.countries[i].country === '中国') { defaultCountry = i; break }
+    }
+    this.countryIdx = defaultCountry
+  }
+
+  // 加载某省份下的城市. initialLoad=true 时不重置 cityIdx/location, 由调用方自定;
+  // initialLoad=false 时默认选第一个城市并触发 RTS 重算.
+  private loadCitiesOfProv(provIdx: number, initialLoad: boolean) {
+    if (provIdx < 0 || provIdx >= this.provinces.length) return
+    this.cities = NativeBridge.geoListCities(this.provinces[provIdx].province)
+    const opts: SelectOption[] = []
+    for (let i = 0; i < this.cities.length; i++) opts.push({ value: this.cities[i].district })
+    this.cityOpts = opts
+    if (initialLoad) return
+    this.cityIdx = 0
+    if (this.cities.length > 0) {
+      this.location = this.cities[0]
+      this.loadRTS()
+    }
+  }
+
+  private filterCountries(continent: string) {
+    const out: TimezoneGroup[] = []
+    for (let i = 0; i < this.allTzGroups.length; i++) {
+      if (this.allTzGroups[i].continent === continent) out.push(this.allTzGroups[i])
+    }
+    this.countries = out
+    const opts: SelectOption[] = []
+    for (let i = 0; i < out.length; i++) opts.push({ value: out[i].country })
+    this.countryOpts = opts
+  }
+
+  // ── 顶栏切换回调 ────────────────────────────────────────
+  onProvinceChange(idx: number) {
+    if (idx < 0 || idx >= this.provinces.length) return
+    this.provIdx = idx
+    this.loadCitiesOfProv(idx, false)
+  }
+
+  onCityChange(idx: number) {
+    if (idx < 0 || idx >= this.cities.length) return
+    this.cityIdx = idx
+    this.location = this.cities[idx]
+    this.loadRTS()
+  }
+
+  onContinentChange(idx: number) {
+    if (idx < 0 || idx >= this.continents.length) return
+    this.contIdx = idx
+    this.filterCountries(this.continents[idx])
+    this.countryIdx = 0
+    this.tickClock()
+  }
+
+  onCountryChange(idx: number) {
+    if (idx < 0 || idx >= this.countries.length) return
+    this.countryIdx = idx
+    this.tickClock()
+  }
+
+  // 每秒刷新双时钟. 外地时间 = UTC + 选中时区
+  tickClock() {
+    const now = new Date()
+    this.localClock = this.fmtClock(now)
+
+    if (this.countries.length === 0 || this.countryIdx >= this.countries.length) {
+      this.intlClock = ''
+      return
+    }
+    const tz = this.countries[this.countryIdx].timezone
+    // UTC 毫秒 = 本地毫秒 + 本地 offset(分钟) * 60000
+    const utcMs = now.getTime() + now.getTimezoneOffset() * 60000
+    const intl = new Date(utcMs + tz * 3600000)
+    this.intlClock = this.fmtClock(intl)
+  }
+
+  private fmtClock(d: Date): string {
+    const pad = (n: number): string => n < 10 ? `0${n}` : `${n}`
+    return `${d.getMonth() + 1}/${d.getDate()} ` +
+           `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
   }
 
   loadMonthData() {
@@ -71,7 +251,7 @@ export struct CalendarPage {
     try {
       this.rts = NativeBridge.calcDayRTS(
         this.currentYear, this.currentMonth, this.rtsDay,
-        this.siteLon, this.siteLat, this.siteTz)
+        this.location.longitude, this.location.latitude, this.location.timezone)
     } catch (e) {
       console.error('calcDayRTS failed: ' + JSON.stringify(e))
       this.rts = null
@@ -194,6 +374,7 @@ export struct CalendarPage {
     Column() {
       this.headerSection()
       this.navSection()
+      this.topLocationStrip()
       this.yearInfoBar()
       this.weekHeader()
       this.calendarGrid()
@@ -202,6 +383,31 @@ export struct CalendarPage {
     .width('100%')
     .height('100%')
     .backgroundColor(AppColors.BACKGROUND)
+    // ── 底部抽屉: 老黄历 / 董公择日经典知识 共用 ──
+    //   通过 sheetMode 切换内容; 单个 bindSheet 避免多 sheet 互相覆盖.
+    .bindSheet($$this.sheetVisible, this.unifiedSheetBuilder(), {
+      height: SheetSize.LARGE,
+      dragBar: true,
+      title: { title: this.sheetTitle() },
+      onDisappear: (): void => { this.closeAlmanacSheet() }
+    })
+  }
+
+  sheetTitle(): string {
+    return this.sheetMode === 'topics' ? '董公择日 · 经典知识' : '老黄历'
+  }
+
+  @Builder
+  unifiedSheetBuilder() {
+    if (this.sheetMode === 'topics') {
+      AlmanacTopicsSheet({ topics: this.topics })
+    } else {
+      AlmanacSheet({
+        day: this.sheetDay,
+        almanac: this.sheetAlmanac,
+        onOpenTopics: (): void => { this.openTopicsSheet() }
+      })
+    }
   }
 
   // ── 顶部标题 ────────────────────────────────────────────
@@ -456,12 +662,14 @@ export struct CalendarPage {
       // 点击切换底部日月升降目标日
       this.rtsDay = day.solarDay
       this.loadRTS()
+      if (this.popupKey !== '') this.ensurePopupAlmanac(day)
     })
     .onHover((isHover: boolean) => {
       if (isHover) {
         this.popupKey = this.dayKey(day)
         this.rtsDay = day.solarDay
         this.loadRTS()
+        this.ensurePopupAlmanac(day)
       }
     })
     .bindPopup(this.isPopupOpen(day), {
@@ -488,6 +696,54 @@ export struct CalendarPage {
     if (resetDay !== this.rtsDay) {
       this.rtsDay = resetDay
       this.loadRTS()
+    }
+  }
+
+  // 浮层老黄历摘要: 仅在 popup 切换时调用一次, 避免每帧跨 JNI.
+  //   key 用日期, 防止 popupKey 抖动时重复请求.
+  ensurePopupAlmanac(day: DayInfo) {
+    const key = this.dayKey(day)
+    if (this.popupAlmanacKey === key && this.popupAlmanac !== null) return
+    try {
+      this.popupAlmanac = NativeBridge.getAlmanac(day.solarYear, day.solarMonth, day.solarDay)
+      this.popupAlmanacKey = key
+    } catch (e) {
+      console.error('getAlmanac failed: ' + JSON.stringify(e))
+      this.popupAlmanac = null
+    }
+  }
+
+  // 打开底部抽屉显示完整老黄历
+  openAlmanacSheet(day: DayInfo) {
+    try {
+      const a = NativeBridge.getAlmanac(day.solarYear, day.solarMonth, day.solarDay)
+      if (a === null) return
+      this.sheetDay = day
+      this.sheetAlmanac = a
+      this.sheetMode = 'almanac'
+      this.sheetVisible = true
+    } catch (e) {
+      console.error('openAlmanacSheet failed: ' + JSON.stringify(e))
+    }
+  }
+
+  closeAlmanacSheet() {
+    this.sheetVisible = false
+    this.sheetMode = 'almanac'
+    this.sheetDay = null
+    this.sheetAlmanac = null
+  }
+
+  // 切换到"董公择日静态知识"; 第一次打开懒加载, 后续命中缓存.
+  //   sheet 已显示, 仅替换 mode -> 内容刷新, 不重新做出场动画
+  openTopicsSheet() {
+    try {
+      if (this.topics.length === 0) {
+        this.topics = NativeBridge.getAlmanacTopics()
+      }
+      this.sheetMode = 'topics'
+    } catch (e) {
+      console.error('openTopicsSheet failed: ' + JSON.stringify(e))
     }
   }
 
@@ -584,6 +840,20 @@ export struct CalendarPage {
         if (day.minor !== '')    this.popupEventLine('·',  day.minor, '', '#DCE0F2')
         if (day.misc !== '')     this.popupEventLine('🍂', day.misc, '', '#80E0A7')
       }
+
+      // 9) 老黄历摘要 + 详情入口
+      Divider().color('#5A5F8C').margin({ top: 4, bottom: 3 })
+      AlmanacInlineRow({ almanac: this.popupAlmanac })
+      Row() {
+        Text('📜 老黄历详情 ›')
+          .fontSize(AppDimens.FONT_CAPTION)
+          .fontColor(AppColors.ACCENT)
+          .fontWeight(FontWeight.Medium)
+      }
+      .width('100%')
+      .justifyContent(FlexAlign.Center)
+      .padding({ top: 6, bottom: 2 })
+      .onClick(() => { this.openAlmanacSheet(day) })
     }
     .padding({ left: 12, right: 12, top: 12, bottom: 12 })
     .constraintSize({ minWidth: 200, maxWidth: 240 })
@@ -670,130 +940,215 @@ export struct CalendarPage {
   }
 
   // ─────────────────────────────────────────────────────────────
-  //  月历底部信息栏: 当日日月升降 (跟随选中日) + 当月朔望/节气 (按月)
-  //  对应 sxwnl/lunar.js 的 RTS1() 文字模块
+  //  顶部地点条 — 两行内联 Select, 对齐 JS 原版 indexmp.htm 顶部
+  //
+  //    第 1 行: [洲 ▼] [国家 ▼]  · UTC±x  当地时间    (国际, 仅展示)
+  //    第 2 行: [省 ▼] [市/县 ▼] · 经X°E 纬Y°N         (国内, 改 location)
+  //
+  //  · 国内行决定日月升降算用的经纬度
+  //  · 国际行只影响顶栏外地时钟; 日历主时区始终用系统本地时区, 与 JS 一致
   // ─────────────────────────────────────────────────────────────
   @Builder
-  bottomInfoBar() {
+  topLocationStrip() {
     Column() {
-      // 标题: 选中日 (北京)
+      // ── 国际行 (展示外地时区+实时时间) ────────────
       Row() {
-        Text(`${YearUtil.astroYearToStr(this.currentYear)}年${this.currentMonth}月${this.rtsDay}日 · 日月升降`)
-          .fontSize(AppDimens.FONT_CAPTION)
-          .fontColor(AppColors.PRIMARY)
-          .fontWeight(FontWeight.Medium)
+        if (this.continents.length > 0) {
+          this.continentSelect()
+          this.countrySelect()
+        }
         Blank()
-        Text(`北京 (${this.siteLon.toFixed(2)}°E ${this.siteLat.toFixed(2)}°N)`)
+        Text(this.countries.length > 0 ? formatTimezone(this.countries[this.countryIdx].timezone) : '')
+          .fontSize(AppDimens.FONT_SMALL)
+          .fontColor(AppColors.PRIMARY)
+          .margin({ left: 6, right: 6 })
+        Text(this.intlClock)
+          .fontSize(AppDimens.FONT_SMALL)
+          .fontColor(AppColors.ACCENT)
+          .fontWeight(FontWeight.Medium)
+      }
+      .width('100%')
+      .padding({ left: 8, right: AppDimens.PADDING_MD, top: 4, bottom: 4 })
+
+      // ── 国内行 (改 location, 触发日月升降重算) ────
+      Row() {
+        if (this.provinces.length > 0) {
+          this.provinceSelect()
+          this.citySelect()
+        }
+        Blank()
+        Text(formatLonLat(this.location.longitude, this.location.latitude))
           .fontSize(AppDimens.FONT_SMALL)
           .fontColor(AppColors.TEXT_SECONDARY)
       }
       .width('100%')
-      .margin({ bottom: 6 })
+      .padding({ left: 8, right: AppDimens.PADDING_MD, top: 4, bottom: 4 })
+    }
+    .width('100%')
+    .backgroundColor(AppColors.SURFACE)
+    .border({ width: { bottom: 0.5 }, color: AppColors.DIVIDER })
+  }
 
-      // 日出/日落/中天
-      this.rtsTripleRow('日出',     this.rts !== null ? this.rts!.sunRise     : '--:--:--',
-                        '日落',     this.rts !== null ? this.rts!.sunSet      : '--:--:--',
-                        '中天',     this.rts !== null ? this.rts!.sunMeridian : '--:--:--')
-      this.rtsTripleRow('月出',     this.rts !== null ? this.rts!.moonRise     : '--:--:--',
-                        '月落',     this.rts !== null ? this.rts!.moonSet      : '--:--:--',
-                        '月中',     this.rts !== null ? this.rts!.moonMeridian : '--:--:--')
-      this.rtsDoubleRow('晨起天亮', this.rts !== null ? this.rts!.civilDawn   : '--:--:--',
-                        '晚上天黑', this.rts !== null ? this.rts!.civilDusk   : '--:--:--')
-      this.rtsDoubleRow('日照时间', this.rts !== null ? this.rts!.dayLength   : '--:--:--',
-                        '白天时间', this.rts !== null ? this.rts!.lightLength : '--:--:--')
+  @Builder
+  continentSelect() {
+    Select(this.contOpts)
+      .selected(this.contIdx)
+      .value(this.continents[this.contIdx])
+      .font({ size: AppDimens.FONT_SMALL })
+      .fontColor(AppColors.ON_SURFACE)
+      .selectedOptionFont({ size: AppDimens.FONT_SMALL, weight: FontWeight.Medium })
+      .optionFont({ size: AppDimens.FONT_SMALL })
+      .onSelect((idx: number) => { this.onContinentChange(idx) })
+  }
 
-      // 月相 / 节气 — 按月固定不变
-      if (this.moonEvents.length > 0 || this.jieQiEvents.length > 0) {
-        Divider().color(AppColors.DIVIDER).margin({ top: 8, bottom: 6 })
+  @Builder
+  countrySelect() {
+    Select(this.countryOpts)
+      .selected(this.countryIdx)
+      .value(this.countries.length > 0 ? this.countries[this.countryIdx].country : '')
+      .font({ size: AppDimens.FONT_SMALL })
+      .fontColor(AppColors.ON_SURFACE)
+      .selectedOptionFont({ size: AppDimens.FONT_SMALL, weight: FontWeight.Medium })
+      .optionFont({ size: AppDimens.FONT_SMALL })
+      .onSelect((idx: number) => { this.onCountryChange(idx) })
+  }
 
-        Text(`${this.currentMonth}月月相与节气`)
-          .fontSize(AppDimens.FONT_SMALL)
-          .fontColor(AppColors.TEXT_SECONDARY)
-          .margin({ bottom: 4 })
+  @Builder
+  provinceSelect() {
+    Select(this.provOpts)
+      .selected(this.provIdx)
+      .value(this.provinces[this.provIdx].province)
+      .font({ size: AppDimens.FONT_SMALL })
+      .fontColor(AppColors.ON_SURFACE)
+      .selectedOptionFont({ size: AppDimens.FONT_SMALL, weight: FontWeight.Medium })
+      .optionFont({ size: AppDimens.FONT_SMALL })
+      .onSelect((idx: number) => { this.onProvinceChange(idx) })
+  }
 
-        // 月相 (按 2 列布局)
-        this.eventGrid(this.moonEvents, AppColors.PRIMARY_LIGHT)
+  @Builder
+  citySelect() {
+    Select(this.cityOpts)
+      .selected(this.cityIdx)
+      .value(this.cities.length > 0 ? this.cities[this.cityIdx].district : '')
+      .font({ size: AppDimens.FONT_SMALL })
+      .fontColor(AppColors.PRIMARY)
+      .selectedOptionFont({ size: AppDimens.FONT_SMALL, weight: FontWeight.Medium })
+      .optionFont({ size: AppDimens.FONT_SMALL })
+      .onSelect((idx: number) => { this.onCityChange(idx) })
+  }
 
-        if (this.jieQiEvents.length > 0) {
-          // 节气分隔与列表
-          this.eventGrid(this.jieQiEvents, AppColors.JIEQI_COLOR)
-        }
+  // ─────────────────────────────────────────────────────────────
+  //  底部信息条 — 紧凑布局, 不再占用过多高度, 保证日历主体完整可见
+  //
+  //  · 单行日月时刻 (1 行 6 列: 日出/中天/日落/月出/月中/月落)
+  //  · 1 行 (天亮/白昼/天黑)
+  //  · 月相 + 节气 (各 1 行流式)
+  // ─────────────────────────────────────────────────────────────
+  @Builder
+  bottomInfoBar() {
+    Column() {
+      // 日月升降 紧凑两行
+      this.sunMoonCompact()
+      // 月相 / 节气 — 一行流式排列
+      if (this.moonEvents.length > 0) {
+        this.eventLine(`月相`, this.moonEvents, AppColors.PRIMARY_LIGHT)
+      }
+      if (this.jieQiEvents.length > 0) {
+        this.eventLine(`节气`, this.jieQiEvents, AppColors.JIEQI_COLOR)
       }
     }
     .width('100%')
-    .padding(AppDimens.PADDING_MD)
+    .padding({
+      left: AppDimens.PADDING_MD,
+      right: AppDimens.PADDING_MD,
+      top: 6,
+      bottom: 6,
+    })
     .backgroundColor(AppColors.SURFACE)
     .border({ width: { top: 0.5 }, color: AppColors.DIVIDER })
   }
 
-  // 三列等宽 (用于"日出/日落/中天"这种紧凑信息)
+  // 日月升降紧凑卡 — 标题 + 一行 6 列 + 一行 3 列
   @Builder
-  rtsTripleRow(l1: string, v1: string, l2: string, v2: string, l3: string, v3: string) {
+  sunMoonCompact() {
+    // 标题
     Row() {
-      this.rtsLabeled(l1, v1)
-      this.rtsLabeled(l2, v2)
-      this.rtsLabeled(l3, v3)
+      Text(`${this.currentMonth}月${this.rtsDay}日 · 日月升降`)
+        .fontSize(AppDimens.FONT_SMALL)
+        .fontColor(AppColors.PRIMARY)
+        .fontWeight(FontWeight.Medium)
+      Blank()
+      Text(this.localClock)
+        .fontSize(10)
+        .fontColor(AppColors.TEXT_SECONDARY)
+    }
+    .width('100%')
+    .margin({ bottom: 2 })
+
+    // 一行 6 列 (太阳出/中/落 + 月亮出/中/落)
+    Row() {
+      this.tinyCell('☀↑', this.rts !== null ? this.rts!.sunRise     : '--:--:--')
+      this.tinyCell('☀',  this.rts !== null ? this.rts!.sunMeridian : '--:--:--')
+      this.tinyCell('☀↓', this.rts !== null ? this.rts!.sunSet      : '--:--:--')
+      this.tinyCell('☾↑', this.rts !== null ? this.rts!.moonRise     : '--:--:--')
+      this.tinyCell('☾',  this.rts !== null ? this.rts!.moonMeridian : '--:--:--')
+      this.tinyCell('☾↓', this.rts !== null ? this.rts!.moonSet      : '--:--:--')
     }
     .width('100%')
     .margin({ top: 2, bottom: 2 })
-  }
 
-  // 两列等宽 (用于"晨起天亮/晚上天黑"这种)
-  @Builder
-  rtsDoubleRow(l1: string, v1: string, l2: string, v2: string) {
+    // 一行 3 列 (晨/昏/白昼)
     Row() {
-      this.rtsLabeled(l1, v1)
-      this.rtsLabeled(l2, v2)
+      this.tinyCell('晨', this.rts !== null ? this.rts!.civilDawn   : '--:--:--')
+      this.tinyCell('日', this.rts !== null ? this.rts!.dayLength   : '--:--:--')
+      this.tinyCell('昏', this.rts !== null ? this.rts!.civilDusk   : '--:--:--')
+      this.tinyCell('白', this.rts !== null ? this.rts!.lightLength : '--:--:--')
     }
     .width('100%')
-    .margin({ top: 2, bottom: 2 })
+    .margin({ top: 2 })
   }
 
+  // 6/3 列等宽紧凑单元 (label + value)
   @Builder
-  rtsLabeled(label: string, value: string) {
+  tinyCell(label: string, value: string) {
     Row() {
       Text(label)
-        .fontSize(AppDimens.FONT_SMALL)
+        .fontSize(10)
         .fontColor(AppColors.TEXT_SECONDARY)
-        .margin({ right: 4 })
+        .margin({ right: 3 })
       Text(value)
-        .fontSize(AppDimens.FONT_CAPTION)
+        .fontSize(10)
         .fontColor(value === '--:--:--' ? AppColors.TEXT_SECONDARY : AppColors.ON_SURFACE)
         .fontWeight(FontWeight.Medium)
     }
     .layoutWeight(1)
-    .alignItems(VerticalAlign.Center)
+    .justifyContent(FlexAlign.Center)
   }
 
-  // 月相/节气栅格 (两列, JS 月历下方"3日 09:17:44 朔月 / 18日 16:47:28 望月"风格)
+  // 月相/节气一行流式
   @Builder
-  eventGrid(events: MonthEvent[], color: string) {
-    Flex({ wrap: FlexWrap.Wrap }) {
+  eventLine(title: string, events: MonthEvent[], dotColor: string) {
+    Flex({ wrap: FlexWrap.Wrap, alignItems: ItemAlign.Center }) {
+      Text(`${title}: `)
+        .fontSize(10)
+        .fontColor(AppColors.PRIMARY)
+        .fontWeight(FontWeight.Medium)
       ForEach(events, (e: MonthEvent, idx: number) => {
         Row() {
-          Text(this.padNum(e.day, 2) + '日')
-            .fontSize(AppDimens.FONT_SMALL)
-            .fontColor(AppColors.TEXT_SECONDARY)
-            .width(28)
-          Text(e.time)
-            .fontSize(AppDimens.FONT_SMALL)
+          Text('●')
+            .fontSize(8)
+            .fontColor(dotColor)
+            .margin({ right: 2 })
+          Text(`${e.name}${this.currentMonth}/${e.day}`)
+            .fontSize(10)
             .fontColor(AppColors.ON_SURFACE)
-            .margin({ left: 2, right: 4 })
-          Text(e.name)
-            .fontSize(AppDimens.FONT_SMALL)
-            .fontColor(color)
-            .fontWeight(FontWeight.Medium)
         }
-        .width('50%')
-        .padding({ top: 2, bottom: 2 })
-        .alignItems(VerticalAlign.Center)
-      }, (e: MonthEvent, idx: number): string => `${e.name}-${e.day}`)
+        .margin({ right: 8 })
+      }, (e: MonthEvent, idx: number): string => `${title}-${e.name}-${e.day}`)
     }
     .width('100%')
+    .margin({ top: 4 })
   }
 
-  padNum(n: number, width: number): string {
-    const s = '' + n
-    return s.length >= width ? s : ' '.repeat(width - s.length) + s
-  }
+
 }

@@ -87,10 +87,12 @@ void GeoPostion::init()
     std::vector<std::vector<std::string>> split_JWv = Util::splitList(JWv,' ');
     double jin,wei;
     JINGWEI jw;
+    jw.tz = 8.0; // 国内统一东八区
     std::string sEng, sChinese;
     for (const auto &str : split_JWv) 
     {
         jw.s = str[0];
+        std::vector<JINGWEI> cities;
         for (const auto &s : str) 
         {
             Util::extractParts(s,sEng,sChinese);
@@ -102,11 +104,17 @@ void GeoPostion::init()
             jw.J = jin;
             jw.W = wei;
             jw.x = sChinese;
+            jw.tz = 8.0;
             auto key = jw.s + "-" + sChinese;
-            jwMap[key] = jw;    
+            jwMap[key] = jw;
+            cities.push_back(jw);
+        }
+        if (!cities.empty()) {
+            orderedProvinces.emplace_back(jw.s, std::move(cities));
         }
     }
 
+    buildTimezoneGroups();
 }
 
 void GeoPostion::JWdecode(const std::string &v,double &jin,double &wei) const
@@ -138,9 +146,108 @@ void GeoPostion::JWdecode(const std::string &v,double &jin,double &wei) const
     wei = decoded_v[0] + decoded_v[1] / 60.0;
 }
 
-void GeoPostion::SQdecode()
-{
+// 兼容旧接口: 留空 (新代码改用 buildTimezoneGroups, init() 已自动调用).
+void GeoPostion::SQdecode() {}
 
+// ── SQv 解析 ──────────────────────────────────────
+// 每行格式: "<大洲>,<国家>,<时区>#[<夏令时>]#<城市1、城市2,...>"
+// 其中第二个 # 后是逗号分隔的下一国家, 因此实际按逗号切后每条记录占 2 段:
+//   parts[0]   = 大洲
+//   parts[1+2k] = 国家
+//   parts[2+2k] = "<tz>[#<dst>]#<城市1、城市2...>"
+void GeoPostion::buildTimezoneGroups()
+{
+    for (const char* row : SQv_array) {
+        if (!row) continue;
+        const std::string line(row);
+
+        // split by ','
+        std::vector<std::string> parts;
+        size_t start = 0;
+        while (start <= line.size()) {
+            auto pos = line.find(',', start);
+            if (pos == std::string::npos) {
+                parts.push_back(line.substr(start));
+                break;
+            }
+            parts.push_back(line.substr(start, pos - start));
+            start = pos + 1;
+        }
+        if (parts.size() < 3) continue;
+
+        const std::string continent = parts[0];
+        const std::string sep_dunhao = "\xe3\x80\x81"; // 中文顿号 "、" 的 UTF-8
+
+        for (size_t i = 1; i + 1 < parts.size(); i += 2) {
+            const std::string& country = parts[i];
+            const std::string& payload = parts[i + 1];
+
+            // payload = "tz[#dst]#cities"; 至少含两个 '#'
+            auto p1 = payload.find('#');
+            if (p1 == std::string::npos) continue;
+            auto p2 = payload.find('#', p1 + 1);
+            const std::string tzStr = payload.substr(0, p1);
+            const std::string citiesStr = (p2 == std::string::npos)
+                ? payload.substr(p1 + 1)
+                : payload.substr(p2 + 1);
+
+            double tz = 0.0;
+            try { tz = std::stod(tzStr); }
+            catch (...) { continue; }
+
+            TimezoneGroup g;
+            g.continent = continent;
+            g.country = country;
+            g.timezone = tz;
+            // 城市分隔符是中文顿号 "、"
+            size_t s = 0;
+            while (s <= citiesStr.size()) {
+                auto e = citiesStr.find(sep_dunhao, s);
+                if (e == std::string::npos) {
+                    if (s < citiesStr.size())
+                        g.cities.push_back(citiesStr.substr(s));
+                    break;
+                }
+                g.cities.push_back(citiesStr.substr(s, e - s));
+                s = e + sep_dunhao.size();
+            }
+            tzGroups.push_back(std::move(g));
+        }
+    }
+}
+
+// ── 目录查询 ──────────────────────────────────────
+std::vector<std::string> GeoPostion::listProvinces() const
+{
+    std::vector<std::string> out;
+    out.reserve(orderedProvinces.size());
+    for (const auto &p : orderedProvinces) out.push_back(p.first);
+    return out;
+}
+
+std::vector<JINGWEI> GeoPostion::listCitiesIn(const std::string &province) const
+{
+    for (const auto &p : orderedProvinces) {
+        if (p.first == province) return p.second;
+    }
+    return {};
+}
+
+std::vector<JINGWEI> GeoPostion::search(const std::string &keyword, int limit) const
+{
+    std::vector<JINGWEI> out;
+    if (keyword.empty()) return out;
+    for (const auto &p : orderedProvinces) {
+        for (const auto &c : p.second) {
+            // 在区县名或省名中包含关键词
+            if (c.x.find(keyword) != std::string::npos ||
+                c.s.find(keyword) != std::string::npos) {
+                out.push_back(c);
+                if ((int)out.size() >= limit) return out;
+            }
+        }
+    }
+    return out;
 }
 
 

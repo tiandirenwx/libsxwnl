@@ -18,6 +18,14 @@ static napi_value Init(napi_env env, napi_value exports) {
         {"getSolarMonthValidDays", NapiGetSolarMonthValidDays},
         {"getYearCalendar",   NapiGetYearCalendar},
         {"calcDayRTS",        NapiCalcDayRTS},
+        {"getAlmanac",        NapiGetAlmanac},
+        {"getAlmanacTopics",  NapiGetAlmanacTopics},
+        // Geo (城市目录)
+        {"geoListProvinces",  NapiGeoListProvinces},
+        {"geoListCities",     NapiGeoListCities},
+        {"geoSearch",         NapiGeoSearch},
+        {"geoListTimezones",  NapiGeoListTimezones},
+        {"geoDefault",        NapiGeoDefault},
         // Bazi
         {"calcBazi",          NapiCalcBazi},
         {"baziReverse",       NapiBaziReverse},

@@ -176,12 +176,24 @@ android/**/lint/outputs/
 android/**/lint/tmp/
 
 # ─────────────────────────────────────────────
+# 5b. 共享 UI 资源 (assets/bazi/) — 编译前由 scripts/sync_bazi_assets.sh 链接
+# ─────────────────────────────────────────────
+android/app/src/main/res/drawable/bz_*
+android/app/src/main/res/font/wen_yue.otf
+harmony/entry/src/main/resources/base/media/bz_*
+harmony/entry/src/main/resources/rawfile/WenYue.otf
+ios/SxwnlCalendar/SxwnlCalendar/Fonts/WenYue.otf
+ios/SxwnlCalendar/SxwnlCalendar/Assets.xcassets/bz_*.imageset/*.png
+ios/SxwnlCalendar/SxwnlCalendar/Assets.xcassets/bz_*.imageset/*.jpg
+
+# ─────────────────────────────────────────────
 # 6. iOS / macOS / Xcode (ios/)
 # ─────────────────────────────────────────────
 ios/build/
 ios/DerivedData/
 ios/**/DerivedData/
 ios/**/build/
+ios/SxwnlCalendar/**/CppSources/
 
 # Xcode 用户级数据 (个人 scheme / 断点 / 窗口状态)
 **/xcuserdata/

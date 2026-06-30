@@ -1,7 +1,9 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════
 # 寿星万年历 - macOS/iOS Xcode 项目快速设置脚本
-# 用法: cd libsxwnl/ios && bash setup_xcode.sh
+# 用法:
+#   bash setup_xcode.sh           # 完整: 编译验证 + 同步源码链接
+#   bash setup_xcode.sh --link-only  # 仅同步 C++ 源码符号链接 (供 build_ios.sh 调用)
 # ═══════════════════════════════════════════════════════════
 
 set -e
@@ -9,6 +11,35 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_DIR="$SCRIPT_DIR/SxwnlCalendar"
+LINK_ONLY=0
+[[ "${1:-}" == "--link-only" ]] && LINK_ONLY=1
+
+link_cpp_sources() {
+    # 创建源文件符号链接（避免复制）
+    # 注意: Xcode 工程使用 PBXFileSystemSynchronizedRootGroup, 同步目录为
+    #   SxwnlCalendar/SxwnlCalendar/CppSources — 必须链接到此路径.
+    local xcode_src="$PROJECT_DIR/SxwnlCalendar/CppSources"
+    mkdir -p "$xcode_src"
+
+    # 使用相对路径符号链接, 克隆到任意目录均可编译
+    for f in "$ROOT_DIR/src"/*.cpp "$ROOT_DIR/src"/*.h; do
+        [[ -e "$f" ]] || continue
+        ln -sf "../../../../src/$(basename "$f")" "$xcode_src/"
+    done
+    # capi/: 排除 test_*.cpp (含 main(), 会与 App 入口冲突)
+    for f in "$ROOT_DIR/capi"/*.cpp "$ROOT_DIR/capi"/*.h; do
+        [[ -e "$f" ]] || continue
+        [[ "$(basename "$f")" == test_* ]] && continue
+        ln -sf "../../../../capi/$(basename "$f")" "$xcode_src/"
+    done
+    echo "  ✓ C++ 源码已链接到 $xcode_src"
+}
+
+if [[ $LINK_ONLY -eq 1 ]]; then
+    link_cpp_sources
+    bash "$ROOT_DIR/scripts/sync_bazi_assets.sh" ios
+    exit 0
+fi
 
 echo "╔══════════════════════════════════════════╗"
 echo "║  寿星万年历 - macOS 项目设置             ║"
@@ -44,21 +75,7 @@ fi
 
 # Step 2: 创建 Xcode 项目目录结构
 echo "➤ Step 2: 准备 Xcode 项目文件..."
-
-# 创建源文件符号链接（避免复制）
-XCODE_SRC="$PROJECT_DIR/CppSources"
-mkdir -p "$XCODE_SRC"
-
-# 链接 src/ 下所有 .cpp / .h (含 world_map* 等)
-for f in "$ROOT_DIR/src"/*.cpp "$ROOT_DIR/src"/*.h; do
-    ln -sf "$f" "$XCODE_SRC/" 2>/dev/null || true
-done
-# 链接 capi/ 下所有 .cpp / .h (sxwnl_capi.*, sxwnl_eclipse_map.* 等)
-for f in "$ROOT_DIR/capi"/*.cpp "$ROOT_DIR/capi"/*.h; do
-    ln -sf "$f" "$XCODE_SRC/" 2>/dev/null || true
-done
-
-echo "  ✓ C++ 源码已链接到 $XCODE_SRC"
+link_cpp_sources
 
 # Step 3: 输出 Xcode 手动配置指引
 echo ""
@@ -88,7 +105,7 @@ echo ""
 echo "  5. Build Settings 搜索并设置:"
 echo "     → C++ Language Dialect: C++17"
 echo "     → Header Search Paths 添加:"
-echo "       $XCODE_SRC"
+echo "       $PROJECT_DIR/SxwnlCalendar/CppSources"
 echo ""
 echo "  6. 选择 My Mac 作为目标 → ⌘B 编译 → ⌘R 运行"
 echo ""

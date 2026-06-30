@@ -18,6 +18,7 @@
 #include "month_calendar.h"
 #include "lunar_ob.h"
 #include "eph_szj.h"
+#include "almanac.h"
 
 #include <array>
 #include <cmath>
@@ -200,6 +201,157 @@ int sxwnl_get_day_info(int year, int month, int day, SxwnlDayInfo *out) {
         std::unique_ptr<Day> d(sxtwl::fromSolar(year, (uint8_t)month, day));
         if (!d) return -1;
         fill_day_info(d.get(), out);
+        return 0;
+    }, -1);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Almanac (老黄历)
+// ═══════════════════════════════════════════════════════════
+//
+//  实现策略: libsxwnl 算干支/农历/星期等 -> 喂入 sxwnl::almanac 查表器.
+//  almanac 模块本身不做任何天文计算, 严格保证 "干支唯一真源" 在 libsxwnl.
+
+#include "almanac_topics.h"
+
+int sxwnl_get_almanac_topics(SxwnlAlmanacTopic *out, int max_count) {
+    return guard([&]() -> int {
+        if (!out || max_count <= 0) return -1;
+        const auto& topics = sxwnl::almanac::topics::kTopics;
+        const int n = std::min(static_cast<int>(topics.size()), max_count);
+        for (int i = 0; i < n; ++i) {
+            safe_copy(out[i].category, sizeof(out[i].category), std::string(topics[i].category));
+            safe_copy(out[i].title,    sizeof(out[i].title),    std::string(topics[i].title));
+            safe_copy(out[i].body,     sizeof(out[i].body),     std::string(topics[i].body));
+        }
+        return n;
+    }, -1);
+}
+
+int sxwnl_get_almanac(int year, int month, int day, SxwnlAlmanac *out) {
+    return guard([&]() -> int {
+        if (!out) return -1;
+        std::unique_ptr<Day> d(sxtwl::fromSolar(year, (uint8_t)month, day));
+        if (!d) return -1;
+
+        const GZ yGZ = d->getYearGZ(false);
+        const GZ mGZ = d->getMonthGZ();
+        const GZ dGZ = d->getDayGZ();
+
+        sxwnl::almanac::DayContext ctx;
+        ctx.year_gan      = yGZ.tg;  ctx.year_zhi  = yGZ.dz;
+        ctx.month_gan     = mGZ.tg;  ctx.month_zhi = mGZ.dz;
+        ctx.day_gan       = dGZ.tg;  ctx.day_zhi   = dGZ.dz;
+        ctx.week_day      = d->getWeek();
+        ctx.lunar_month   = d->getLunarMonth();
+        ctx.lunar_day     = d->getLunarDay();
+        ctx.is_leap_month = d->isLunarLeap();
+        ctx.julian_day    = static_cast<double>(d->getJulianDate());
+        ctx.today_jie_qi  = d->hasJieQi() ? d->getJieQi() : -1;
+        // 探查"明日"是否为节气: 用儒略日 +1 反推日期再查
+        {
+            int yn = year, mn = month, dn = day;
+            // 简易日期加一天 (足够 1900-2100 区间)
+            static const int kDaysPerMonth[13] = {0,31,28,31,30,31,30,31,31,30,31,30,31};
+            auto isLeap = [](int y){ return (y%4==0 && y%100!=0) || y%400==0; };
+            int dim = kDaysPerMonth[mn] + (mn == 2 && isLeap(yn) ? 1 : 0);
+            if (++dn > dim) { dn = 1; if (++mn > 12) { mn = 1; ++yn; } }
+            std::unique_ptr<Day> dn_obj(sxtwl::fromSolar(yn, (uint8_t)mn, dn));
+            if (dn_obj && dn_obj->hasJieQi()) ctx.tomorrow_jie_qi = dn_obj->getJieQi();
+        }
+
+        const auto a = sxwnl::almanac::query(ctx);
+
+        std::memset(out, 0, sizeof(*out));
+        safe_copy(out->xiu,              sizeof(out->xiu),              a.xiu);
+        safe_copy(out->xiu_zheng,        sizeof(out->xiu_zheng),        a.xiu_zheng);
+        safe_copy(out->xiu_animal,       sizeof(out->xiu_animal),       a.xiu_animal);
+        safe_copy(out->xiu_luck,         sizeof(out->xiu_luck),         a.xiu_luck);
+        safe_copy(out->xiu_gong,         sizeof(out->xiu_gong),         a.xiu_gong);
+        safe_copy(out->twelve_god,       sizeof(out->twelve_god),       a.twelve_god);
+        safe_copy(out->huang_hei,        sizeof(out->huang_hei),        a.huang_hei);
+        out->is_huang_dao = a.is_huang_dao;
+        safe_copy(out->chong_sheng_xiao, sizeof(out->chong_sheng_xiao), a.chong_sheng_xiao);
+        safe_copy(out->chong_gan_zhi,    sizeof(out->chong_gan_zhi),    a.chong_gan_zhi);
+        safe_copy(out->sha,              sizeof(out->sha),              a.sha);
+        safe_copy(out->xi_shen_fang,     sizeof(out->xi_shen_fang),     a.xi_shen_fang);
+        safe_copy(out->yang_gui_fang,    sizeof(out->yang_gui_fang),    a.yang_gui_fang);
+        safe_copy(out->yin_gui_fang,     sizeof(out->yin_gui_fang),     a.yin_gui_fang);
+        safe_copy(out->fu_shen_fang,     sizeof(out->fu_shen_fang),     a.fu_shen_fang);
+        safe_copy(out->cai_shen_fang,    sizeof(out->cai_shen_fang),    a.cai_shen_fang);
+        safe_copy(out->peng_zu_gan,      sizeof(out->peng_zu_gan),      a.peng_zu_gan);
+        safe_copy(out->peng_zu_zhi,      sizeof(out->peng_zu_zhi),      a.peng_zu_zhi);
+
+        const int n_quote = std::min(
+            static_cast<int>(a.quotes.size()),
+            static_cast<int>(SXWNL_ALMANAC_QUOTE_MAX));
+        for (int i = 0; i < n_quote; ++i) {
+            const auto &q = a.quotes[i];
+            safe_copy(out->quotes[i].source, sizeof(out->quotes[i].source), q.source);
+            safe_copy(out->quotes[i].title,  sizeof(out->quotes[i].title),  q.title);
+            safe_copy(out->quotes[i].luck,   sizeof(out->quotes[i].luck),   q.luck);
+            safe_copy(out->quotes[i].body,   sizeof(out->quotes[i].body),   q.body);
+        }
+        out->quote_count = n_quote;
+
+        // 神煞
+        const int n_ss = std::min(
+            static_cast<int>(a.shen_sha.size()),
+            static_cast<int>(SXWNL_ALMANAC_SHENSHA_MAX));
+        for (int i = 0; i < n_ss; ++i) {
+            safe_copy(out->shen_sha[i].name, sizeof(out->shen_sha[i].name), a.shen_sha[i].name);
+            out->shen_sha[i].is_lucky = a.shen_sha[i].is_lucky;
+            out->shen_sha[i].weight   = a.shen_sha[i].weight;
+        }
+        out->shen_sha_count = n_ss;
+
+        // 宜忌
+        const int n_yi = std::min(
+            static_cast<int>(a.yi.size()),
+            static_cast<int>(SXWNL_ALMANAC_TEXT_LIST_ITEM_MAX));
+        for (int i = 0; i < n_yi; ++i)
+            safe_copy(out->yi[i], SXWNL_ALMANAC_TEXT_LIST_LEN, a.yi[i]);
+        out->yi_count = n_yi;
+
+        const int n_ji = std::min(
+            static_cast<int>(a.ji.size()),
+            static_cast<int>(SXWNL_ALMANAC_TEXT_LIST_ITEM_MAX));
+        for (int i = 0; i < n_ji; ++i)
+            safe_copy(out->ji[i], SXWNL_ALMANAC_TEXT_LIST_LEN, a.ji[i]);
+        out->ji_count = n_ji;
+
+        // 吉时
+        const int n_lh = std::min(
+            static_cast<int>(a.lucky_hours.size()),
+            static_cast<int>(SXWNL_ALMANAC_LUCKY_HOUR_MAX));
+        for (int i = 0; i < n_lh; ++i) {
+            safe_copy(out->lucky_hours[i].name, sizeof(out->lucky_hours[i].name),
+                      a.lucky_hours[i].name);
+            out->lucky_hours[i].zhi = a.lucky_hours[i].zhi;
+        }
+        out->lucky_hour_count = n_lh;
+
+        // 用事择吉
+        const int n_ev = std::min(
+            static_cast<int>(a.event_advices.size()),
+            static_cast<int>(SXWNL_ALMANAC_EVENT_MAX));
+        for (int i = 0; i < n_ev; ++i) {
+            safe_copy(out->events[i].event,  sizeof(out->events[i].event),
+                      a.event_advices[i].event);
+            out->events[i].suitable = a.event_advices[i].suitable;
+            safe_copy(out->events[i].reason, sizeof(out->events[i].reason),
+                      a.event_advices[i].reason);
+        }
+        out->event_count = n_ev;
+
+        // 特别提示
+        const int n_no = std::min(
+            static_cast<int>(a.notes.size()),
+            static_cast<int>(SXWNL_ALMANAC_NOTE_MAX));
+        for (int i = 0; i < n_no; ++i)
+            safe_copy(out->notes[i], sizeof(out->notes[i]), a.notes[i]);
+        out->note_count = n_no;
+
         return 0;
     }, -1);
 }
@@ -1068,6 +1220,104 @@ int sxwnl_calc_day_rts(int year, int month, int day,
 
 void sxwnl_string_free(char *str) {
     std::free(str);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Geo Directory API (薄包装 src/geo.cpp 的 GeoPostion 单例)
+// ═══════════════════════════════════════════════════════════════
+namespace {
+inline void copy_city(const JINGWEI &jw, SxwnlGeoCity &out) {
+    safe_copy(out.province, sizeof(out.province), jw.s);
+    safe_copy(out.district, sizeof(out.district), jw.x);
+    out.longitude = jw.J;
+    out.latitude  = jw.W;
+    out.timezone  = jw.tz;
+}
+} // namespace
+
+int sxwnl_geo_list_provinces(SxwnlGeoProvince *out, int out_max) {
+    return guard([&]() -> int {
+        if (!out || out_max <= 0) return -1;
+        auto &g = GeoPostion::getInstance();
+        auto names = g.listProvinces();
+        int n = 0;
+        for (const auto &name : names) {
+            if (n >= out_max) break;
+            std::memset(&out[n], 0, sizeof(SxwnlGeoProvince));
+            safe_copy(out[n].province, sizeof(out[n].province), name);
+            out[n].city_count = (int)g.listCitiesIn(name).size();
+            ++n;
+        }
+        return n;
+    }, -1);
+}
+
+int sxwnl_geo_list_cities(const char *province, SxwnlGeoCity *out, int out_max) {
+    return guard([&]() -> int {
+        if (!province || !out || out_max <= 0) return -1;
+        auto &g = GeoPostion::getInstance();
+        auto cities = g.listCitiesIn(province);
+        int n = 0;
+        for (const auto &c : cities) {
+            if (n >= out_max) break;
+            std::memset(&out[n], 0, sizeof(SxwnlGeoCity));
+            copy_city(c, out[n]);
+            ++n;
+        }
+        return n;
+    }, -1);
+}
+
+int sxwnl_geo_search(const char *keyword, SxwnlGeoCity *out, int out_max) {
+    return guard([&]() -> int {
+        if (!keyword || !out || out_max <= 0) return -1;
+        auto &g = GeoPostion::getInstance();
+        auto matches = g.search(keyword, out_max);
+        int n = 0;
+        for (const auto &c : matches) {
+            if (n >= out_max) break;
+            std::memset(&out[n], 0, sizeof(SxwnlGeoCity));
+            copy_city(c, out[n]);
+            ++n;
+        }
+        return n;
+    }, -1);
+}
+
+int sxwnl_geo_list_timezone_groups(SxwnlTimezoneGroup *out, int out_max) {
+    return guard([&]() -> int {
+        if (!out || out_max <= 0) return -1;
+        auto &g = GeoPostion::getInstance();
+        const auto &groups = g.timezoneGroups();
+        int n = 0;
+        for (const auto &grp : groups) {
+            if (n >= out_max) break;
+            std::memset(&out[n], 0, sizeof(SxwnlTimezoneGroup));
+            safe_copy(out[n].continent, sizeof(out[n].continent), grp.continent);
+            safe_copy(out[n].country,   sizeof(out[n].country),   grp.country);
+            out[n].timezone = grp.timezone;
+            int cn = 0;
+            for (const auto &city : grp.cities) {
+                if (cn >= 8) break;
+                safe_copy(out[n].cities[cn], sizeof(out[n].cities[cn]), city);
+                ++cn;
+            }
+            out[n].city_count = cn;
+            ++n;
+        }
+        return n;
+    }, -1);
+}
+
+int sxwnl_geo_default(SxwnlGeoCity *out) {
+    return guard([&]() -> int {
+        if (!out) return -1;
+        std::memset(out, 0, sizeof(SxwnlGeoCity));
+        auto &g = GeoPostion::getInstance();
+        JINGWEI jw = g.getDefaultGeoPos();
+        copy_city(jw, *out);
+        return 0;
+    }, -1);
 }
 
 // ═══════════════════════════════════════════════════════════════

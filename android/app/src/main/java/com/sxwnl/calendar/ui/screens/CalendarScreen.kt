@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,13 +31,25 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.sxwnl.calendar.data.AlmanacQuote
+import com.sxwnl.calendar.data.AlmanacTopic
 import com.sxwnl.calendar.data.CalendarRepository
+import com.sxwnl.calendar.data.DayAlmanac
 import com.sxwnl.calendar.data.DayInfo
 import com.sxwnl.calendar.data.DayRTS
+import com.sxwnl.calendar.data.EventAdvice
+import com.sxwnl.calendar.data.GeoCity
+import com.sxwnl.calendar.data.GeoProvince
+import com.sxwnl.calendar.data.LuckyHour
+import com.sxwnl.calendar.data.ShenSha
+import com.sxwnl.calendar.data.TimezoneGroup
 import com.sxwnl.calendar.ui.theme.*
 import com.sxwnl.calendar.util.YearUtil
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Calendar
+import java.util.TimeZone
+import kotlin.math.abs
 
 // ════════════════════════════════════════════════════════════════
 //  CalendarScreen — 与鸿蒙端 CalendarPage.ets 对齐的月历页面
@@ -45,9 +58,8 @@ import java.util.Calendar
 /** 月相 / 节气事件 (用于底栏摘要) */
 private data class MonthEvent(val day: Int, val time: String, val name: String)
 
-private const val SITE_LON = 116.3833
-private const val SITE_LAT = 39.9
-private const val SITE_TZ = 8.0
+/** 默认地点 — NAPI 失败时兜底用 (天安门, UTC+8) */
+private val DEFAULT_LOCATION = GeoCity("北京市", "天安门", 116.3833, 39.9, 8.0)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,12 +83,28 @@ fun CalendarScreen() {
     var moonEvents by remember { mutableStateOf(emptyList<MonthEvent>()) }
     var jieQiEvents by remember { mutableStateOf(emptyList<MonthEvent>()) }
 
-    fun loadRTS() {
-        scope.launch {
-            rts = CalendarRepository.calcDayRTS(year, month, rtsDay,
-                SITE_LON, SITE_LAT, SITE_TZ)
-        }
-    }
+    // ── 地点选择 (对齐鸿蒙端 CalendarPage.ets) ─────────────────
+    //  国内: 改 location → 触发日月升降重算
+    //  国际: 仅供顶栏"外地实时时间"展示, 不修改 location
+    var location by remember { mutableStateOf(DEFAULT_LOCATION) }
+    var provinces by remember { mutableStateOf(emptyList<GeoProvince>()) }
+    var cities by remember { mutableStateOf(emptyList<GeoCity>()) }
+    var provIdx by remember { mutableIntStateOf(0) }
+    var cityIdx by remember { mutableIntStateOf(0) }
+
+    var continents by remember { mutableStateOf(emptyList<String>()) }
+    var countries by remember { mutableStateOf(emptyList<TimezoneGroup>()) }
+    var contIdx by remember { mutableIntStateOf(0) }
+    var countryIdx by remember { mutableIntStateOf(0) }
+    var allTzGroups by remember { mutableStateOf(emptyList<TimezoneGroup>()) }
+
+    // 双时钟 (本地系统时区 + 选中国际时区), 每秒刷新
+    var localClock by remember { mutableStateOf("") }
+    var intlClock by remember { mutableStateOf("") }
+
+    // 老黄历静态知识 (董公总论/口诀/方位 — 全局只取一次, 懒加载常驻)
+    var topics by remember { mutableStateOf(emptyList<AlmanacTopic>()) }
+    var showTopics by remember { mutableStateOf(false) }
 
     fun collectEvents(monthDays: List<DayInfo>) {
         val moon = mutableListOf<MonthEvent>()
@@ -98,31 +126,18 @@ fun CalendarScreen() {
         jieQiEvents = jq
     }
 
-    fun loadMonth() {
-        scope.launch {
-            val md = CalendarRepository.getMonthData(year, month)
-            days = md
-            yearInput = YearUtil.astroYearToStr(year)
-            monthInput = "$month"
-            collectEvents(md)
-            if (rtsDay > md.size) rtsDay = 1
-            rts = CalendarRepository.calcDayRTS(year, month, rtsDay,
-                SITE_LON, SITE_LAT, SITE_TZ)
-        }
-    }
-
     fun navigate(dy: Int, dm: Int) {
         var y = year + dy
         var m = month + dm
         while (m <= 0)  { m += 12; y-- }
         while (m > 12) { m -= 12; y++ }
         year = y; month = m; rtsDay = 1
-        loadMonth()
+        // 不显式 loadMonth — 依赖 LaunchedEffect(year, month, location) 统一驱动,
+        // 避免与 LaunchedEffect 并行触发双重 IO 调用.
     }
 
     fun goToday() {
         year = todayY; month = todayM; rtsDay = todayD
-        loadMonth()
     }
 
     fun applyInput() {
@@ -130,14 +145,93 @@ fun CalendarScreen() {
         val m = monthInput.toIntOrNull() ?: 0
         if (YearUtil.isAstroYearValid(y) && m in 1..12) {
             year = y; month = m; rtsDay = 1
-            loadMonth()
         } else {
             yearInput = YearUtil.astroYearToStr(year)
             monthInput = "$month"
         }
     }
 
-    LaunchedEffect(year, month) { loadMonth() }
+    // ── 一次性初始化: 加载省/市/时区目录 + 默认地点 (单次, Unit key) ──
+    //   不在这里加载月数据 — 让下面的 LaunchedEffect(year, month, location) 统一处理.
+    //   这样消除"两个 effect 并行触发 loadMonth 产生竞态 (谁后写 rts 谁赢)"的问题.
+    LaunchedEffect(Unit) {
+        val ps = CalendarRepository.geoListProvinces()
+        if (ps.isNotEmpty()) {
+            provinces = ps
+            val def = CalendarRepository.geoDefault() ?: DEFAULT_LOCATION
+            val pi = ps.indexOfFirst { it.province == def.province }.coerceAtLeast(0)
+            provIdx = pi
+            val cs = CalendarRepository.geoListCities(ps[pi].province)
+            cities = cs
+            val ci = cs.indexOfFirst { it.district == def.district }.coerceAtLeast(0)
+            cityIdx = ci
+            location = if (cs.isNotEmpty()) cs[ci] else def
+        }
+        val tz = CalendarRepository.geoListTimezones()
+        if (tz.isNotEmpty()) {
+            allTzGroups = tz
+            val seen = HashSet<String>()
+            continents = tz.mapNotNull { if (seen.add(it.continent)) it.continent else null }
+            if (continents.isNotEmpty()) {
+                val asiaIdx = continents.indexOf("亚洲").coerceAtLeast(0)
+                contIdx = asiaIdx
+                val countriesIn = tz.filter { it.continent == continents[asiaIdx] }
+                countries = countriesIn
+                val chinaIdx = countriesIn.indexOfFirst { it.country == "中国" }
+                    .coerceAtLeast(0)
+                countryIdx = chinaIdx
+            }
+        }
+    }
+
+    // ── 时钟: 每秒刷新本地 + 选中国际时区 ──
+    //
+    //  关键点: 显示某时区的"当地小时"必须用对应 TimeZone 的 Calendar 来读字段,
+    //  不能直接 timeInMillis += offset + 用本机时区 Calendar 读 — 那样读出的是
+    //  设备本地时区下对应那一刻的时分秒, 而不是目标时区的本地时间.
+    //
+    //  做法: 共用同一个 timeInMillis (绝对 UTC 时刻), 切换 Calendar 的 timeZone,
+    //  即可正确显示各自时区的当地时间.
+    //
+    //  LaunchedEffect 在 Composable 离开组合时自动取消, 协程随之停止, 不会
+    //  泄漏定时器. 切换 countries/countryIdx 会重启循环以重算外地时间.
+    LaunchedEffect(countries, countryIdx) {
+        while (true) {
+            val nowMs = System.currentTimeMillis()
+            val localCal = Calendar.getInstance().apply { timeInMillis = nowMs }
+            localClock = fmtClock(localCal)
+            if (countries.isNotEmpty() && countryIdx in countries.indices) {
+                val tz = countries[countryIdx].timezone
+                // 用 fixed-offset TimeZone 读取, 避免设备本地时区干扰
+                val intlTz = TimeZone.getTimeZone(buildGmtId(tz))
+                val intlCal = Calendar.getInstance(intlTz).apply { timeInMillis = nowMs }
+                intlClock = fmtClock(intlCal)
+            } else {
+                intlClock = ""
+            }
+            delay(1000)
+        }
+    }
+
+    // 统一月数据加载: 任何 year/month 改变都重新拉, 用最新 location 计算 rts.
+    LaunchedEffect(year, month) {
+        val md = CalendarRepository.getMonthData(year, month)
+        days = md
+        yearInput = YearUtil.astroYearToStr(year)
+        monthInput = "$month"
+        collectEvents(md)
+        if (rtsDay > md.size) rtsDay = 1
+    }
+
+    // 统一 RTS 加载: 任何 (year, month, rtsDay, location) 改变都重新算.
+    //   - 切换日期(navigate / goToday / applyInput) → 触发
+    //   - 切换城市 (onCityChange / onProvinceChange) → 触发
+    //   - 点击某日 (onTapDay 设置 rtsDay) → 触发
+    //   消除分散的手动 loadRTS 调用, 避免与 effect 重复.
+    LaunchedEffect(year, month, rtsDay, location) {
+        rts = CalendarRepository.calcDayRTS(year, month, rtsDay,
+            location.longitude, location.latitude, location.timezone)
+    }
 
     Column(Modifier.fillMaxSize().background(Background)) {
         HeaderSection(year, month, days.firstOrNull())
@@ -151,6 +245,45 @@ fun CalendarScreen() {
             onApplyInput = ::applyInput,
             onToday = ::goToday
         )
+        TopLocationStrip(
+            // ── 国际 ──
+            continents = continents, contIdx = contIdx,
+            countries = countries, countryIdx = countryIdx,
+            intlClock = intlClock,
+            localClock = localClock,
+            onContinentChange = { idx ->
+                if (idx in continents.indices) {
+                    contIdx = idx
+                    val filtered = allTzGroups.filter { it.continent == continents[idx] }
+                    countries = filtered
+                    countryIdx = 0
+                }
+            },
+            onCountryChange = { idx ->
+                if (idx in countries.indices) countryIdx = idx
+            },
+            // ── 国内 ──
+            provinces = provinces, provIdx = provIdx,
+            cities = cities, cityIdx = cityIdx, location = location,
+            onProvinceChange = { idx ->
+                if (idx in provinces.indices) {
+                    provIdx = idx
+                    scope.launch {
+                        val cs = CalendarRepository.geoListCities(provinces[idx].province)
+                        cities = cs
+                        cityIdx = 0
+                        // location 改变会自动触发 LaunchedEffect(...) 重算 rts
+                        if (cs.isNotEmpty()) location = cs[0]
+                    }
+                }
+            },
+            onCityChange = { idx ->
+                if (idx in cities.indices) {
+                    cityIdx = idx
+                    location = cities[idx]
+                }
+            }
+        )
         YearInfoBar(days.firstOrNull())
         WeekHeader()
         CalendarGrid(
@@ -159,13 +292,12 @@ fun CalendarScreen() {
             selectedDay = selectedDay,
             onTapDay = { d ->
                 selectedDay = d
-                rtsDay = d.solarDay
-                loadRTS()
+                rtsDay = d.solarDay   // 触发 LaunchedEffect 重算 rts
                 showSheet = true
             },
             modifier = Modifier.weight(1f)
         )
-        BottomInfoBar(year, month, rtsDay, rts, moonEvents, jieQiEvents)
+        BottomInfoBar(year, month, rtsDay, rts, moonEvents, jieQiEvents, location)
     }
 
     if (showSheet && selectedDay != null) {
@@ -175,15 +307,74 @@ fun CalendarScreen() {
             onDismiss = {
                 showSheet = false
                 selectedDay = null
-                // 浮层关闭: 当前若为今月 -> 回到今天的日月升降, 否则用 1 号
+                // 浮层关闭: 今月回到今天的日月升降, 否则用 1 号; rtsDay 变化会
+                // 自动触发 LaunchedEffect 重算
                 val resetDay = if (year == todayY && month == todayM) todayD else 1
-                if (resetDay != rtsDay) {
-                    rtsDay = resetDay
-                    loadRTS()
-                }
+                if (resetDay != rtsDay) rtsDay = resetDay
+            },
+            onOpenTopics = {
+                // 切换到"董公择日 · 经典知识": 关闭日详情, 打开静态知识 Dialog.
+                //   切换 (而非叠加) 与鸿蒙端 sheetMode='topics' 语义一致.
+                showSheet = false
+                showTopics = true
             }
         )
     }
+
+    // 静态知识 Dialog (按需懒加载 + 缓存)
+    if (showTopics) {
+        LaunchedEffect(Unit) {
+            if (topics.isEmpty()) topics = CalendarRepository.getAlmanacTopics()
+        }
+        AlmanacTopicsDialog(
+            topics = topics,
+            onDismiss = { showTopics = false }
+        )
+    }
+}
+
+// 双时钟显示格式 "M/d HH:mm:ss"
+//  注意: 字段 (HOUR_OF_DAY 等) 是按 Calendar 实例的 timeZone 解读 timeInMillis,
+//  调用方必须保证 Calendar 设置了正确的目标时区, 否则会用设备本地时区, 显示错误.
+private fun fmtClock(c: Calendar): String {
+    val m = c.get(Calendar.MONTH) + 1
+    val d = c.get(Calendar.DAY_OF_MONTH)
+    val h = c.get(Calendar.HOUR_OF_DAY)
+    val mi = c.get(Calendar.MINUTE)
+    val s = c.get(Calendar.SECOND)
+    return "%d/%d %02d:%02d:%02d".format(m, d, h, mi, s)
+}
+
+/**
+ * 把 sxwnl 的"小时时区"转成 Java TimeZone ID. 例:
+ *   8.0  → "GMT+08:00" (北京)
+ *   -5.0 → "GMT-05:00" (纽约 EST)
+ *   5.5  → "GMT+05:30" (印度)
+ *
+ *  使用 "GMT±HH:MM" 而非 "Etc/GMT±H" 的原因:
+ *  - "Etc/GMT" 系列的符号是反的 ("Etc/GMT-8" 才是 UTC+8), 极易写错
+ *  - "GMT±HH:MM" 是 ISO 8601 风格, Java TimeZone 支持得很好
+ */
+private fun buildGmtId(tz: Double): String {
+    val sign = if (tz >= 0) "+" else "-"
+    val abs = abs(tz)
+    val h = abs.toInt()
+    val mm = ((abs - h) * 60).toInt()
+    return "GMT%s%02d:%02d".format(sign, h, mm)
+}
+
+private fun fmtTz(tz: Double): String {
+    val sign = if (tz >= 0) "+" else "-"
+    val abs = abs(tz)
+    val h = abs.toInt()
+    val mm = ((abs - h) * 60).toInt()
+    return if (mm == 0) "UTC$sign$h" else "UTC$sign$h:%02d".format(mm)
+}
+
+private fun fmtLonLat(lon: Double, lat: Double): String {
+    val lonDir = if (lon >= 0) "E" else "W"
+    val latDir = if (lat >= 0) "N" else "S"
+    return "%.1f°%s %.1f°%s".format(abs(lon), lonDir, abs(lat), latDir)
 }
 
 // ─── Header ─────────────────────────────────────────────────────────────
@@ -208,7 +399,7 @@ private fun HeaderSection(year: Int, month: Int, first: DayInfo?) {
                 Text("农历", fontSize = Dimens.fontCaption,
                     color = OnPrimary.copy(alpha = 0.7f))
                 Spacer(Modifier.width(4.dp))
-                Text("${first.yearGz}年",
+                Text("${first.yearGZ}年",
                     fontSize = Dimens.fontCaption, fontWeight = FontWeight.Medium,
                     color = Accent)
             }
@@ -329,6 +520,142 @@ private fun TextInputCompact(
     }
 }
 
+// ─── Top location strip ────────────────────────────────────────────────
+//
+//  两行内联下拉, 对齐 JS 原版 indexmp.htm 顶部 (鸿蒙 CalendarPage.ets):
+//
+//    第 1 行: [洲 ▼] [国家 ▼]  · UTC±x · 当地实时时钟   (国际, 仅展示)
+//    第 2 行: [省 ▼] [市/县 ▼] · 经X°E 纬Y°N             (国内, 改 location)
+//
+//  · 国内行决定日月升降算用的经纬度
+//  · 国际行只影响顶栏外地时钟; 不改 location, 与 JS 一致
+// ────────────────────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TopLocationStrip(
+    continents: List<String>, contIdx: Int,
+    countries: List<TimezoneGroup>, countryIdx: Int,
+    intlClock: String,
+    localClock: String,
+    onContinentChange: (Int) -> Unit,
+    onCountryChange: (Int) -> Unit,
+    provinces: List<GeoProvince>, provIdx: Int,
+    cities: List<GeoCity>, cityIdx: Int,
+    location: GeoCity,
+    onProvinceChange: (Int) -> Unit,
+    onCityChange: (Int) -> Unit
+) {
+    Column(
+        Modifier.fillMaxWidth().background(Surface)
+            .border(0.5.dp, DividerColor)
+    ) {
+        // ── 国际行 ──
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (continents.isNotEmpty()) {
+                DropdownText(
+                    label = continents.getOrNull(contIdx) ?: "",
+                    options = continents,
+                    onSelect = onContinentChange
+                )
+                Spacer(Modifier.width(6.dp))
+                DropdownText(
+                    label = countries.getOrNull(countryIdx)?.country ?: "",
+                    options = countries.map { it.country },
+                    onSelect = onCountryChange
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            val tz = countries.getOrNull(countryIdx)?.timezone
+            if (tz != null) {
+                Text(fmtTz(tz), fontSize = Dimens.fontSmall, color = Primary,
+                    modifier = Modifier.padding(horizontal = 6.dp))
+            }
+            Text(intlClock, fontSize = Dimens.fontSmall,
+                fontWeight = FontWeight.Medium, color = Accent)
+        }
+        // ── 国内行 ──
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (provinces.isNotEmpty()) {
+                DropdownText(
+                    label = provinces.getOrNull(provIdx)?.province ?: "",
+                    options = provinces.map { it.province },
+                    onSelect = onProvinceChange
+                )
+                Spacer(Modifier.width(6.dp))
+                DropdownText(
+                    label = cities.getOrNull(cityIdx)?.district ?: "",
+                    options = cities.map { it.district },
+                    onSelect = onCityChange,
+                    primary = true
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            // 国内行右侧: 经纬度 + 本地系统时钟 (与国际行 intlClock 形成对照)
+            Text(fmtLonLat(location.longitude, location.latitude),
+                fontSize = Dimens.fontSmall, color = TextSecondary,
+                modifier = Modifier.padding(end = 6.dp))
+            Text(localClock, fontSize = Dimens.fontSmall,
+                fontWeight = FontWeight.Medium, color = Primary)
+        }
+    }
+}
+
+/** 紧凑下拉文本 — 单击展开列表; options 大于 200 项时建议改用搜索 sheet */
+@Composable
+private fun DropdownText(
+    label: String,
+    options: List<String>,
+    onSelect: (Int) -> Unit,
+    primary: Boolean = false
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        Row(
+            Modifier
+                .clip(RoundedCornerShape(Dimens.radiusSm))
+                .background(PrimaryLight.copy(alpha = 0.1f))
+                .clickable { expanded = true }
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                label.ifEmpty { "—" },
+                fontSize = Dimens.fontSmall,
+                fontWeight = FontWeight.Medium,
+                color = if (primary) Primary else OnSurface,
+                maxLines = 1
+            )
+            Text(" ▼", fontSize = 8.sp, color = TextSecondary)
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .heightIn(max = 320.dp)
+                .background(Surface)
+        ) {
+            options.forEachIndexed { idx, opt ->
+                DropdownMenuItem(
+                    text = {
+                        Text(opt, fontSize = Dimens.fontCaption, color = OnSurface)
+                    },
+                    onClick = {
+                        expanded = false
+                        onSelect(idx)
+                    }
+                )
+            }
+        }
+    }
+}
+
 // ─── Year info bar ──────────────────────────────────────────────────────
 
 @Composable
@@ -344,7 +671,7 @@ private fun YearInfoBar(first: DayInfo?) {
         Text("☰", fontSize = 14.sp, color = Accent,
             modifier = Modifier.padding(end = 6.dp))
         if (first != null) {
-            Text("${first.yearGz}年", fontSize = Dimens.fontBody,
+            Text("${first.yearGZ}年", fontSize = Dimens.fontBody,
                 fontWeight = FontWeight.Medium, color = Primary)
             Text("  |  ", fontSize = Dimens.fontBody, color = DividerColor)
             Text("生肖${first.shengXiao}", fontSize = Dimens.fontBody, color = Primary)
@@ -510,7 +837,8 @@ private fun shortName(s: String): String {
 @Composable
 private fun BottomInfoBar(
     year: Int, month: Int, rtsDay: Int, rts: DayRTS?,
-    moonEvents: List<MonthEvent>, jieQiEvents: List<MonthEvent>
+    moonEvents: List<MonthEvent>, jieQiEvents: List<MonthEvent>,
+    location: GeoCity
 ) {
     Column(
         Modifier
@@ -523,7 +851,10 @@ private fun BottomInfoBar(
                 fontSize = Dimens.fontCaption, fontWeight = FontWeight.Medium,
                 color = Primary)
             Spacer(Modifier.weight(1f))
-            Text(String.format("北京 (%.2f°E %.2f°N)", SITE_LON, SITE_LAT),
+            val locLabel = if (location.district.isNotEmpty() &&
+                            location.district != location.province)
+                "${location.province}·${location.district}" else location.district
+            Text("$locLabel (${fmtLonLat(location.longitude, location.latitude)})",
                 fontSize = Dimens.fontSmall, color = TextSecondary)
         }
         Spacer(Modifier.height(6.dp))
@@ -650,11 +981,22 @@ private val PopupDivider = Color(0xFF5A5F8C)   // 纯色分隔线 (不再 20% �
 private fun DayDetailDialog(
     day: DayInfo,
     todayY: Int, todayM: Int, todayD: Int,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onOpenTopics: () -> Unit
 ) {
     val isToday = day.solarYear == todayY &&
                   day.solarMonth == todayM &&
                   day.solarDay == todayD
+
+    // 老黄历按需加载, 切换日期时重新拉取
+    var almanac by remember(day.solarYear, day.solarMonth, day.solarDay) {
+        mutableStateOf<DayAlmanac?>(null)
+    }
+    LaunchedEffect(day.solarYear, day.solarMonth, day.solarDay) {
+        almanac = CalendarRepository.getAlmanac(
+            day.solarYear, day.solarMonth, day.solarDay)
+    }
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -665,7 +1007,7 @@ private fun DayDetailDialog(
         ) {
             Surface(
                 modifier = Modifier
-                    .widthIn(max = 260.dp)
+                    .widthIn(max = 320.dp)
                     .padding(horizontal = Dimens.paddingLg),
                 shape = RoundedCornerShape(Dimens.radiusMd),
                 color = PopupBg,
@@ -686,14 +1028,14 @@ private fun DayDetailDialog(
                         day.constellationName
                     )
                     PopupInfoLine(
-                        "${day.yearGz}年",
+                        "${day.yearGZ}年",
                         (if (day.isLeapMonth) "闰" else "") + day.lunarMonthName,
                         "${day.lunarDayName}日"
                     )
                     PopupInfoLine(
-                        "${day.yearGz}年",
-                        "${day.monthGz}月",
-                        "${day.dayGz}日"
+                        "${day.yearGZ}年",
+                        "${day.monthGZ}月",
+                        "${day.dayGZ}日"
                     )
                     PopupInfoLine(
                         day.yearNaYin, day.monthNaYin, day.dayNaYin,
@@ -750,8 +1092,360 @@ private fun DayDetailDialog(
                             PopupEventLine("🍂", day.misc, "", PopupGreen)
                         }
                     }
+
+                    // ── 老黄历区块 (按需展示, 失败则不显示) ──────
+                    val a = almanac
+                    if (a != null) {
+                        Spacer(Modifier.height(8.dp))
+                        PopupDividerLine()
+                        Spacer(Modifier.height(6.dp))
+                        AlmanacPanel(a)
+                    }
+
+                    // ── 经典知识入口 (与鸿蒙 "📜 老黄历详情 ›" 对齐) ──
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(Dimens.radiusSm))
+                            .clickable(onClick = onOpenTopics)
+                            .padding(vertical = 6.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("📜 老黄历经典 · 董公择日要诀 ›",
+                            fontSize = Dimens.fontCaption,
+                            fontWeight = FontWeight.Medium,
+                            color = PopupGold)
+                    }
                 }
             }
+        }
+    }
+}
+
+// ─── 老黄历面板 ────────────────────────────────────────────────────────
+//
+//  紧凑展示: 二十八宿/黄道/冲煞 + 五吉神 + 彭祖 + 神煞 + 宜忌 + 用事 + 吉时.
+//  仅在 DayDetailDialog 内调用, 滚动容器由外层提供.
+
+private val ZhiNames = listOf("子","丑","寅","卯","辰","巳",
+                              "午","未","申","酉","戌","亥")
+
+@Composable
+private fun AlmanacPanel(a: DayAlmanac) {
+    Text("老黄历", fontSize = Dimens.fontCaption,
+        fontWeight = FontWeight.Medium, color = PopupGold,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+        textAlign = TextAlign.Center)
+
+    PopupInfoLine(
+        "${a.xiu}宿(${a.xiuZheng}${a.xiuAnimal})",
+        a.twelveGod, a.huangHei,
+        color = if (a.isHuangDao) PopupGreen else PopupRed,
+        bold = true
+    )
+    PopupInfoLine(
+        "冲${a.chongShengXiao}",
+        a.chongGanZhi, "煞${a.sha}"
+    )
+    // 五方位 (喜/财/福 + 阳贵/阴贵), 与鸿蒙 AlmanacComponents 对齐
+    PopupDirRow5(listOf(
+        "喜"   to a.xiShenFang,
+        "财"   to a.caiShenFang,
+        "福"   to a.fuShenFang,
+        "阳贵" to a.yangGuiFang,
+        "阴贵" to a.yinGuiFang
+    ))
+
+    if (a.pengZuGan.isNotEmpty() || a.pengZuZhi.isNotEmpty()) {
+        Spacer(Modifier.height(2.dp))
+        PopupCenteredText(a.pengZuGan, color = PopupSub)
+        PopupCenteredText(a.pengZuZhi, color = PopupSub)
+    }
+
+    // 神煞: 完整展示, 按权重降序 (与鸿蒙一致). 同类型可能 20+ 项, 让弹窗
+    //   滚动容器承接溢出, 不再做 take(6) 截断 — 老黄历参考价值在"全部命中".
+    if (a.shenSha.isNotEmpty()) {
+        Spacer(Modifier.height(4.dp))
+        val lucky = a.shenSha.filter { it.isLucky }.sortedByDescending { it.weight }
+        val bad   = a.shenSha.filter { !it.isLucky }.sortedByDescending { it.weight }
+        if (lucky.isNotEmpty()) ShenShaRow("吉神", lucky, PopupGreen)
+        if (bad.isNotEmpty())   ShenShaRow("凶煞", bad,   PopupRed)
+    }
+
+    // 宜 / 忌
+    if (a.yi.isNotEmpty() || a.ji.isNotEmpty()) {
+        Spacer(Modifier.height(4.dp))
+        if (a.yi.isNotEmpty()) TextLine("宜", a.yi.toList(), PopupGreen)
+        if (a.ji.isNotEmpty()) TextLine("忌", a.ji.toList(), PopupRed)
+    }
+
+    // 吉时
+    if (a.luckyHours.isNotEmpty()) {
+        Spacer(Modifier.height(4.dp))
+        Row(Modifier.fillMaxWidth()) {
+            Text("吉时", fontSize = Dimens.fontSmall, color = PopupSub,
+                modifier = Modifier.padding(end = 6.dp))
+            Text(a.luckyHours.joinToString("  ") { lh ->
+                val z = if (lh.zhi in 0..11) ZhiNames[lh.zhi] else ""
+                "${lh.name}($z)"
+            }, fontSize = Dimens.fontSmall, color = PopupGold)
+        }
+    }
+
+    // 用事择吉 — 完整展示 (典型 4-8 条, 不再截断)
+    if (a.events.isNotEmpty()) {
+        Spacer(Modifier.height(4.dp))
+        Text("用事择吉", fontSize = Dimens.fontSmall, color = PopupSub,
+            modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+        for (e in a.events) EventRow(e)
+    }
+
+    // 备注 (节气/月度提示)
+    if (a.notes.isNotEmpty()) {
+        Spacer(Modifier.height(4.dp))
+        for (n in a.notes) {
+            PopupCenteredText("· $n", color = PopupSub,
+                size = Dimens.fontSmall)
+        }
+    }
+
+    // 董公择日要诀语录 — 完整展示 (与鸿蒙一致, 多条逐一显示)
+    if (a.quotes.isNotEmpty()) {
+        Spacer(Modifier.height(4.dp))
+        for (q in a.quotes) {
+            QuoteCard(q)
+            Spacer(Modifier.height(2.dp))
+        }
+    }
+}
+
+/**
+ * 老黄历静态知识 Dialog — 按 category 分组列出 (董公总论/择日基础理论/口诀/方位 等).
+ *
+ * 与鸿蒙 AlmanacTopicsSheet 对齐: 顶部分类导航(默认显示首类), 滚动展示该类
+ * 全部条目, 标题 + 正文双层结构. topics 通常 ≤ 64 条, 单次渲染无性能问题.
+ */
+@Composable
+private fun AlmanacTopicsDialog(
+    topics: List<AlmanacTopic>,
+    onDismiss: () -> Unit
+) {
+    // 按 category 保序去重 — 显示顺序与 C++ 注册顺序一致, 不做字典序重排.
+    val categories: List<String> = remember(topics) {
+        val seen = LinkedHashSet<String>()
+        topics.forEach { seen.add(it.category.ifEmpty { "未分类" }) }
+        seen.toList()
+    }
+    var selectedCat by remember(categories) { mutableStateOf(categories.firstOrNull() ?: "") }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Surface(
+                modifier = Modifier
+                    .widthIn(max = 340.dp)
+                    .padding(horizontal = Dimens.paddingLg),
+                shape = RoundedCornerShape(Dimens.radiusMd),
+                color = PopupBg,
+                tonalElevation = 8.dp,
+                shadowElevation = 12.dp,
+                border = androidx.compose.foundation.BorderStroke(0.5.dp, PopupBorder)
+            ) {
+                Column(Modifier.padding(horizontal = 12.dp, vertical = 12.dp)) {
+                    Text(
+                        "📜 老黄历经典 · 董公择日",
+                        fontSize = Dimens.fontBody,
+                        fontWeight = FontWeight.Bold,
+                        color = PopupGold,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(Modifier.height(8.dp))
+
+                    if (topics.isEmpty()) {
+                        Text(
+                            "暂无数据",
+                            fontSize = Dimens.fontCaption,
+                            color = PopupSub,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                            textAlign = TextAlign.Center
+                        )
+                    } else {
+                        // 横向滚动的分类导航条
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            for (cat in categories) {
+                                val sel = cat == selectedCat
+                                Box(
+                                    Modifier
+                                        .clip(RoundedCornerShape(Dimens.radiusSm))
+                                        .background(
+                                            if (sel) PopupGold.copy(alpha = 0.18f)
+                                            else Color.Transparent
+                                        )
+                                        .clickable { selectedCat = cat }
+                                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Text(cat,
+                                        fontSize = Dimens.fontSmall,
+                                        fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (sel) PopupGold else PopupSub)
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(6.dp))
+                        PopupDividerLine()
+                        Spacer(Modifier.height(6.dp))
+
+                        // 内容滚动区 (限高 ~480dp, 留出对话框周边留白)
+                        Column(
+                            Modifier
+                                .heightIn(max = 480.dp)
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            val filtered = topics.filter {
+                                (it.category.ifEmpty { "未分类" }) == selectedCat
+                            }
+                            for ((idx, t) in filtered.withIndex()) {
+                                if (idx > 0) Spacer(Modifier.height(8.dp))
+                                Text(t.title,
+                                    fontSize = Dimens.fontCaption,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PopupGold)
+                                Spacer(Modifier.height(2.dp))
+                                Text(t.body,
+                                    fontSize = Dimens.fontSmall,
+                                    color = PopupText,
+                                    lineHeight = 18.sp)
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(10.dp))
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(Dimens.radiusSm))
+                            .clickable(onClick = onDismiss)
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("关闭",
+                            fontSize = Dimens.fontCaption,
+                            fontWeight = FontWeight.Medium,
+                            color = PopupSub)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 紧凑 5 列方位 (喜/财/福/阳贵/阴贵), 等间距均分.
+ *
+ * label 是中文方位简称, dir 是 "东南"/"西北" 等具体方位串; dir 为空时显示 "—".
+ */
+@Composable
+private fun PopupDirRow5(items: List<Pair<String, String>>) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 1.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly
+    ) {
+        for ((label, dir) in items) {
+            Text(
+                "$label${dir.ifEmpty { "—" }}",
+                fontSize = Dimens.fontSmall,
+                fontWeight = FontWeight.Medium,
+                color = if (dir.isEmpty()) PopupSub.copy(alpha = 0.4f) else PopupGold,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
+private fun ShenShaRow(label: String, items: List<ShenSha>, color: Color) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
+        Text(label, fontSize = Dimens.fontSmall, color = PopupSub,
+            modifier = Modifier.padding(end = 6.dp))
+        Text(items.joinToString("  ") { it.name },
+            fontSize = Dimens.fontSmall, color = color,
+            modifier = Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun TextLine(label: String, items: List<String>, color: Color) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
+        Text(label, fontSize = Dimens.fontCaption,
+            fontWeight = FontWeight.Medium, color = color,
+            modifier = Modifier.padding(end = 6.dp))
+        Text(items.joinToString("、"),
+            fontSize = Dimens.fontCaption, color = PopupText,
+            modifier = Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun EventRow(e: EventAdvice) {
+    val marker = if (e.suitable) "✓" else "✗"
+    val color = if (e.suitable) PopupGreen else PopupRed
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 1.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(marker, fontSize = Dimens.fontCaption,
+            fontWeight = FontWeight.Bold, color = color,
+            modifier = Modifier.padding(end = 4.dp))
+        Text(e.event, fontSize = Dimens.fontCaption,
+            color = PopupText, modifier = Modifier.padding(end = 4.dp))
+        if (e.reason.isNotEmpty()) {
+            Text("(${e.reason})", fontSize = Dimens.fontSmall, color = PopupSub)
+        }
+    }
+}
+
+@Composable
+private fun QuoteCard(q: AlmanacQuote) {
+    val accentColor = when (q.luck) {
+        "吉" -> PopupGreen
+        "凶" -> PopupRed
+        "混" -> PopupGold
+        else -> PopupSub
+    }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(Dimens.radiusSm))
+            .background(PopupBorder.copy(alpha = 0.3f))
+            .padding(8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(q.title, fontSize = Dimens.fontSmall,
+                fontWeight = FontWeight.Medium, color = accentColor,
+                modifier = Modifier.weight(1f))
+            if (q.luck.isNotEmpty()) {
+                Text(q.luck, fontSize = Dimens.fontSmall,
+                    fontWeight = FontWeight.Bold, color = accentColor)
+            }
+        }
+        if (q.source.isNotEmpty()) {
+            Text("— ${q.source}", fontSize = 9.sp, color = PopupSub,
+                modifier = Modifier.padding(top = 1.dp))
+        }
+        if (q.body.isNotEmpty()) {
+            Text(q.body, fontSize = Dimens.fontSmall, color = PopupText,
+                modifier = Modifier.padding(top = 4.dp), maxLines = 6)
         }
     }
 }

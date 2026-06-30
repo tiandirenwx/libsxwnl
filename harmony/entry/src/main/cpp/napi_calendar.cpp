@@ -160,6 +160,98 @@ napi_value NapiGetYearCalendar(napi_env env, napi_callback_info info) {
     return arr;
 }
 
+// 老黄历 (二十八宿/黄道黑道/冲煞/方位/彭祖)
+//   参数: (year, month, day)
+napi_value NapiGetAlmanac(napi_env env, napi_callback_info info) {
+    NArgs a(env, info, 3);
+    SxwnlAlmanac r{};
+    if (sxwnl_get_almanac(a.intAt(0), a.intAt(1), a.intAt(2), &r) != 0)
+        return js_null(env);
+
+    NArr quotes(env, r.quote_count);
+    for (int i = 0; i < r.quote_count; ++i) {
+        quotes.push(NObj(env)
+            .s("source", r.quotes[i].source)
+            .s("title",  r.quotes[i].title)
+            .s("luck",   r.quotes[i].luck)
+            .s("body",   r.quotes[i].body));
+    }
+
+    NArr shenSha(env, r.shen_sha_count);
+    for (int i = 0; i < r.shen_sha_count; ++i) {
+        shenSha.push(NObj(env)
+            .s("name",    r.shen_sha[i].name)
+            .b("isLucky", r.shen_sha[i].is_lucky)
+            .i("weight",  r.shen_sha[i].weight));
+    }
+
+    NArr yi(env, r.yi_count);
+    for (int i = 0; i < r.yi_count; ++i) yi.push(static_cast<const char*>(r.yi[i]));
+    NArr ji(env, r.ji_count);
+    for (int i = 0; i < r.ji_count; ++i) ji.push(static_cast<const char*>(r.ji[i]));
+
+    NArr luckyHours(env, r.lucky_hour_count);
+    for (int i = 0; i < r.lucky_hour_count; ++i) {
+        luckyHours.push(NObj(env)
+            .s("name", r.lucky_hours[i].name)
+            .i("zhi",  r.lucky_hours[i].zhi));
+    }
+
+    NArr events(env, r.event_count);
+    for (int i = 0; i < r.event_count; ++i) {
+        events.push(NObj(env)
+            .s("event",    r.events[i].event)
+            .b("suitable", r.events[i].suitable)
+            .s("reason",   r.events[i].reason));
+    }
+
+    NArr notes(env, r.note_count);
+    for (int i = 0; i < r.note_count; ++i) notes.push(static_cast<const char*>(r.notes[i]));
+
+    return NObj(env)
+        .s("xiu",            r.xiu)
+        .s("xiuZheng",       r.xiu_zheng)
+        .s("xiuAnimal",      r.xiu_animal)
+        .s("xiuLuck",        r.xiu_luck)
+        .s("xiuGong",        r.xiu_gong)
+        .s("twelveGod",      r.twelve_god)
+        .s("huangHei",       r.huang_hei)
+        .b("isHuangDao",     r.is_huang_dao)
+        .s("chongShengXiao", r.chong_sheng_xiao)
+        .s("chongGanZhi",    r.chong_gan_zhi)
+        .s("sha",            r.sha)
+        .s("xiShenFang",     r.xi_shen_fang)
+        .s("yangGuiFang",    r.yang_gui_fang)
+        .s("yinGuiFang",     r.yin_gui_fang)
+        .s("fuShenFang",     r.fu_shen_fang)
+        .s("caiShenFang",    r.cai_shen_fang)
+        .s("pengZuGan",      r.peng_zu_gan)
+        .s("pengZuZhi",      r.peng_zu_zhi)
+        .v("quotes",         quotes)
+        .v("shenSha",        shenSha)
+        .v("yi",             yi)
+        .v("ji",             ji)
+        .v("luckyHours",     luckyHours)
+        .v("events",         events)
+        .v("notes",          notes);
+}
+
+// 静态知识 (董公总论/口诀/方位 等)
+napi_value NapiGetAlmanacTopics(napi_env env, napi_callback_info /*info*/) {
+    SxwnlAlmanacTopic items[32];
+    int n = sxwnl_get_almanac_topics(items, 32);
+    if (n < 0) return js_null(env);
+
+    NArr arr(env, n);
+    for (int i = 0; i < n; ++i) {
+        arr.push(NObj(env)
+            .s("category", items[i].category)
+            .s("title",    items[i].title)
+            .s("body",     items[i].body));
+    }
+    return arr;
+}
+
 // 日月升降/中天 (单天版本, 对应 JS RTS1 月历底栏)
 //   参数: (year, month, day, longitude, latitude, tzHours)
 napi_value NapiCalcDayRTS(napi_env env, napi_callback_info info) {
@@ -180,4 +272,100 @@ napi_value NapiCalcDayRTS(napi_env env, napi_callback_info info) {
         .s("civilDusk",    r.civil_dusk)
         .s("dayLength",    r.day_length)
         .s("lightLength",  r.light_length);
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  地理目录 (薄包装 src/geo.cpp 中的 GeoPostion)
+// ─────────────────────────────────────────────────────────────────
+
+// 列省: () -> [{ province, cityCount }]
+napi_value NapiGeoListProvinces(napi_env env, napi_callback_info /*info*/) {
+    constexpr int kMax = 64;
+    SxwnlGeoProvince items[kMax];
+    int n = sxwnl_geo_list_provinces(items, kMax);
+    if (n < 0) return js_null(env);
+
+    NArr arr(env, n);
+    for (int i = 0; i < n; ++i) {
+        arr.push(NObj(env)
+            .s("province",  items[i].province)
+            .i("cityCount", items[i].city_count));
+    }
+    return arr;
+}
+
+// 列某省内城市: (province: string) -> [{ province, district, longitude, latitude, timezone }]
+napi_value NapiGeoListCities(napi_env env, napi_callback_info info) {
+    NArgs a(env, info, 1);
+    const std::string province = a.strAt(0);
+    constexpr int kMax = 512;
+    std::vector<SxwnlGeoCity> items(kMax);
+    int n = sxwnl_geo_list_cities(province.c_str(), items.data(), kMax);
+    if (n < 0) return js_null(env);
+
+    NArr arr(env, n);
+    for (int i = 0; i < n; ++i) {
+        arr.push(NObj(env)
+            .s("province",  items[i].province)
+            .s("district",  items[i].district)
+            .d("longitude", items[i].longitude)
+            .d("latitude",  items[i].latitude)
+            .d("timezone",  items[i].timezone));
+    }
+    return arr;
+}
+
+// 模糊搜索: (keyword: string, limit?: int) -> [{...city}]
+napi_value NapiGeoSearch(napi_env env, napi_callback_info info) {
+    NArgs a(env, info, 2);
+    const std::string keyword = a.strAt(0);
+    int limit = a.intAt(1);
+    if (limit <= 0 || limit > 256) limit = 64;
+    std::vector<SxwnlGeoCity> items(limit);
+    int n = sxwnl_geo_search(keyword.c_str(), items.data(), limit);
+    if (n < 0) return js_null(env);
+
+    NArr arr(env, n);
+    for (int i = 0; i < n; ++i) {
+        arr.push(NObj(env)
+            .s("province",  items[i].province)
+            .s("district",  items[i].district)
+            .d("longitude", items[i].longitude)
+            .d("latitude",  items[i].latitude)
+            .d("timezone",  items[i].timezone));
+    }
+    return arr;
+}
+
+// 国际时区分组: () -> [{ continent, country, timezone, cities[] }]
+napi_value NapiGeoListTimezones(napi_env env, napi_callback_info /*info*/) {
+    constexpr int kMax = 300;
+    std::vector<SxwnlTimezoneGroup> items(kMax);
+    int n = sxwnl_geo_list_timezone_groups(items.data(), kMax);
+    if (n < 0) return js_null(env);
+
+    NArr arr(env, n);
+    for (int i = 0; i < n; ++i) {
+        NArr cities(env, items[i].city_count);
+        for (int k = 0; k < items[i].city_count; ++k)
+            cities.push(items[i].cities[k]);
+        arr.push(NObj(env)
+            .s("continent", items[i].continent)
+            .s("country",   items[i].country)
+            .d("timezone",  items[i].timezone)
+            .v("cities",    cities));
+    }
+    return arr;
+}
+
+// 默认地点 (北京天安门): () -> { province, district, longitude, latitude, timezone }
+napi_value NapiGeoDefault(napi_env env, napi_callback_info /*info*/) {
+    SxwnlGeoCity c{};
+    if (sxwnl_geo_default(&c) != 0) return js_null(env);
+    return NObj(env)
+        .s("province",  c.province)
+        .s("district",  c.district)
+        .d("longitude", c.longitude)
+        .d("latitude",  c.latitude)
+        .d("timezone",  c.timezone);
 }

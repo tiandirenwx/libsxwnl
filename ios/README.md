@@ -37,7 +37,9 @@ libsxwnl C++17 核心 (src/*.cpp)
 
 ### Xcode 工程
 
-`ios/SxwnlCalendar/SxwnlCalendar.xcodeproj` 已配置好。打开后直接 ⌘R 运行即可。
+`ios/SxwnlCalendar/SxwnlCalendar.xcodeproj` 已配置好。克隆后直接打开，⌘R 运行即可。
+
+编译前会自动执行 **Link C++ Sources** 构建阶段，将 `src/`、`capi/` 符号链接到 `SxwnlCalendar/CppSources/`（无需手动运行 `setup_xcode.sh`）。命令行打包时 `scripts/build_ios.sh` 也会同步链接。
 
 ### 工程关键配置
 
@@ -81,7 +83,11 @@ ios/SxwnlCalendar/
 
 ## C++ 核心如何被链接
 
-Xcode 工程已将仓库根的 `src/*.cpp` 与 `capi/sxwnl_capi.cpp` 加入 build sources，编译时直接静态链接到 app 二进制。Bridging Header 暴露 C API 给 Swift。
+`CppSources/` 不入库（见根目录 `.gitignore`），由构建脚本在本地生成指向 `src/`、`capi/` 的符号链接。Xcode 每次编译前自动运行 `ios/setup_xcode.sh --link-only`；新增 `.cpp` 后重新编译即可被纳入。Bridging Header 暴露 C API 给 Swift。
+
+## 共享 UI 资源 (八字页)
+
+字体 `WenYue.otf`、12 张生肖图、`bz_paper.jpg` 仅在仓库根 `assets/bazi/` 保留一份。三端编译前由 `scripts/sync_bazi_assets.sh` 自动同步到各平台资源目录（Android/iOS 符号链接，鸿蒙复制实体文件；均由构建流程自动触发），换机器 clone 后直接编译即可，无需手动操作。
 
 ## 兼容性提示
 

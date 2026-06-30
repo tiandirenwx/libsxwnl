@@ -46,6 +46,13 @@ BUILD_DIR="$IOS_DIR/build/ci"
 
 [[ -d "$PROJECT" ]] || die "找不到 Xcode 项目: $PROJECT"
 command -v xcodebuild >/dev/null 2>&1 || die "未找到 xcodebuild, 请安装 Xcode 与 Command Line Tools"
+
+# 打包前同步 C++ 源码符号链接 (含 almanac 等新增文件)
+if [[ -f "$IOS_DIR/setup_xcode.sh" ]]; then
+    info "同步 iOS C++ 源码链接..."
+    bash "$IOS_DIR/setup_xcode.sh" --link-only
+fi
+
 mkdir -p "$DIST_DIR" "$BUILD_DIR"
 
 # ── 参数 ──

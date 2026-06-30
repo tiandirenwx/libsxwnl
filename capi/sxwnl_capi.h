@@ -535,6 +535,130 @@ int sxwnl_star_hx_calc(const SxwnlStar *in, int in_count,
                        int mode, double longitude, double latitude,
                        SxwnlStarResult *out, int max_count);
 
+// ─── 老黄历 (Almanac) ──────────────────────────────────────
+//
+//  设计契约: 老黄历模块"不重算干支/农历/节气" - 所有输入由 libsxwnl
+//  内部算出再喂给 almanac 查表器, 保证全项目唯一真源, 避免节气交界
+//  日上日历与黄历显示不一致的 bug.
+//
+//  数据移植自 lunar-javascript (MIT).
+// ───────────────────────────────────────────────────────────
+
+// 择日典籍语录 (董公择日要诀 / 玉匣记 / 通胜经 ...)
+//   同一日不同典籍各占一条; quote_count 给出实际条数.
+typedef struct {
+    char source[24];           // 来源 "董公择日要诀"
+    char title[40];            // 标题 "正月·开子日"
+    char luck[8];              // 整体基调 "吉"/"凶"/"平"/"混"/""
+    char body[1024];           // 正文 (单条最长约 ~700 字节)
+} SxwnlAlmanacQuote;
+
+#define SXWNL_ALMANAC_QUOTE_MAX 4 // 当前仅董公诀, 预留 4 槽位
+
+// 神煞 (天德/月厌/白虎入中宫/三合 ...)
+//   name 留 32 字节 — 最长 "人中三奇(壬癸辛)" 23 字节, 给 32 留余量
+typedef struct {
+    char name[32];             // "天德"/"月厌大祸"/"人中三奇(壬癸辛)"
+    bool is_lucky;             // 吉神=true / 凶神=false
+    int32_t weight;            // 权重 1-3 (1一般, 2中, 3大煞)
+} SxwnlShenSha;
+
+#define SXWNL_ALMANAC_SHENSHA_MAX 24  // 一日命中神煞通常 5-15 条
+
+// 吉时
+typedef struct {
+    char name[12];             // "福德"/"凤辇"/"贵人(阳)" 等
+    int32_t zhi;               // 0..11
+} SxwnlLuckyHour;
+
+#define SXWNL_ALMANAC_LUCKY_HOUR_MAX 8
+
+// 用事择吉建议
+typedef struct {
+    char event[16];            // "动土"/"上梁"/"安床" 等
+    bool suitable;             // 是否适合
+    char reason[40];           // 一句话理由 "天赦日"/"杨公忌日"
+} SxwnlEventAdvice;
+
+#define SXWNL_ALMANAC_EVENT_MAX 8
+
+// 文本数组 (宜忌/特别提示 用)
+#define SXWNL_ALMANAC_TEXT_LIST_ITEM_MAX 5
+#define SXWNL_ALMANAC_TEXT_LIST_LEN      16
+typedef char SxwnlTextItem[SXWNL_ALMANAC_TEXT_LIST_LEN];
+typedef char SxwnlNoteItem[80];
+#define SXWNL_ALMANAC_NOTE_MAX 4
+
+typedef struct {
+    // ── 二十八宿 ──
+    char xiu[8];               // 宿名 "角"
+    char xiu_zheng[4];         // 七政 "木"
+    char xiu_animal[8];        // 动物 "蛟"
+    char xiu_luck[4];          // "吉" / "凶"
+    char xiu_gong[4];          // 四象 "东" (东青龙/南朱雀/西白虎/北玄武)
+
+    // ── 黄道黑道 ──
+    char twelve_god[8];        // 12 神 "青龙"
+    char huang_hei[8];         // "黄道" / "黑道"
+    bool is_huang_dao;
+
+    // ── 冲煞 ──
+    char chong_sheng_xiao[8];  // "马"
+    char chong_gan_zhi[8];     // "戊午"
+    char sha[8];               // "南"
+
+    // ── 五吉神方位 ──
+    char xi_shen_fang[8];      // 喜神
+    char yang_gui_fang[8];     // 阳贵神
+    char yin_gui_fang[8];      // 阴贵神
+    char fu_shen_fang[8];      // 福神
+    char cai_shen_fang[8];     // 财神
+
+    // ── 彭祖百忌 ──
+    char peng_zu_gan[64];      // "甲不开仓 财物耗散"
+    char peng_zu_zhi[64];      // "子不问卜 自惹祸殃"
+
+    // ── 择日典籍语录 (董公择日要诀, 未来可加玉匣记/通胜经) ─
+    SxwnlAlmanacQuote quotes[SXWNL_ALMANAC_QUOTE_MAX];
+    int32_t quote_count;
+
+    // ── 神煞 (按权重排序, 吉凶混编) ──────────────────────
+    SxwnlShenSha shen_sha[SXWNL_ALMANAC_SHENSHA_MAX];
+    int32_t shen_sha_count;
+
+    // ── 宜忌 (神煞投票结果, 各最多 5 条) ─────────────────
+    SxwnlTextItem yi[SXWNL_ALMANAC_TEXT_LIST_ITEM_MAX];
+    int32_t yi_count;
+    SxwnlTextItem ji[SXWNL_ALMANAC_TEXT_LIST_ITEM_MAX];
+    int32_t ji_count;
+
+    // ── 吉曜时法 (5吉时 + 2贵人时) ───────────────────────
+    SxwnlLuckyHour lucky_hours[SXWNL_ALMANAC_LUCKY_HOUR_MAX];
+    int32_t lucky_hour_count;
+
+    // ── 用事择吉建议 (动土/竖柱/上梁/建屋/安灶/安床...) ──
+    SxwnlEventAdvice events[SXWNL_ALMANAC_EVENT_MAX];
+    int32_t event_count;
+
+    // ── 特别提示 (节气/三煞方位...) ─────────────────────
+    SxwnlNoteItem notes[SXWNL_ALMANAC_NOTE_MAX];
+    int32_t note_count;
+} SxwnlAlmanac;
+
+// 取公历某日的老黄历完整数据. 返回 0 成功, -1 失败.
+int sxwnl_get_almanac(int year, int month, int day, SxwnlAlmanac *out);
+
+// 静态知识 (董公总论/口诀/方位 等, 与日历无关).
+//   字段尺寸需为最长 UTF-8 字节 +1, 否则中文末尾会被截在多字节中间产生乱码.
+typedef struct {
+    char category[32];     // "总论"/"基础理论"/"建筑"/"口诀"/"方位"
+    char title[64];        // 例 "乌兔太阳推算方法" (8 汉字 = 24 字节)
+    char body[1024];
+} SxwnlAlmanacTopic;
+
+// 取所有 topic 条目, max_count 容量, 返回真实条数. 失败返 -1.
+int sxwnl_get_almanac_topics(SxwnlAlmanacTopic *out, int max_count);
+
 // ─── Eclipse / Astronomy ───
 
 // Returns dynamically allocated string; caller must call sxwnl_string_free()
@@ -565,6 +689,40 @@ typedef struct {
 int sxwnl_calc_day_rts(int year, int month, int day,
                        double longitude, double latitude,
                        double tz_hours, SxwnlDayRTS *out);
+
+// ─── 地理目录 (GeoPostion + JWv/SQv 解码) ──────────────────
+//   数据完全来自 libsxwnl 内部 (src/geo.cpp), 上层无需重复维护城市表.
+typedef struct {
+    char   province[64];      // "北京市"/"福建省"/...
+    char   district[64];      // "天安门"/"福州市"/...
+    double longitude;         // 度, 东+ 西-
+    double latitude;          // 度, 北+ 南-
+    double timezone;          // 小时, 东+ 西- (国内统一 8)
+} SxwnlGeoCity;
+
+typedef struct {
+    char province[64];        // 省/直辖市/自治区名
+    int  city_count;          // 该省下的城市/区县总数
+} SxwnlGeoProvince;
+
+typedef struct {
+    char continent[32];       // "亚洲"/"欧洲"/...
+    char country[96];         // "中国"/"加拿大东部时区"/...
+    double timezone;          // 标准时偏移 (不含 DST)
+    char cities[8][32];       // 至多 8 个代表城市名 (展示用)
+    int  city_count;          // 实际填充的城市数
+} SxwnlTimezoneGroup;
+
+// 列出所有省/直辖市/自治区. 返回实际填充条数, 失败返 -1.
+int sxwnl_geo_list_provinces(SxwnlGeoProvince *out, int out_max);
+// 列某省内所有城市. 返回实际填充条数, 失败返 -1.
+int sxwnl_geo_list_cities(const char *province, SxwnlGeoCity *out, int out_max);
+// 按关键词模糊搜索区县/省份名. 返回实际填充条数, 失败返 -1.
+int sxwnl_geo_search(const char *keyword, SxwnlGeoCity *out, int out_max);
+// 列出国际时区分组. 返回实际填充条数, 失败返 -1.
+int sxwnl_geo_list_timezone_groups(SxwnlTimezoneGroup *out, int out_max);
+// 取默认地点(北京天安门). 失败返 -1.
+int sxwnl_geo_default(SxwnlGeoCity *out);
 
 void  sxwnl_string_free(char *str);
 

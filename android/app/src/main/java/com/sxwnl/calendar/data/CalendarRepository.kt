@@ -122,11 +122,21 @@ object CalendarRepository {
             columns     = SxwnlNative.baziGetColumns(handle)?.toList() ?: emptyList()
             currentDaYun   = SxwnlNative.baziGetCurrentDaYun(handle)
             currentLiuNian = SxwnlNative.baziGetCurrentLiuNian(handle)
-            daYunColumns   = SxwnlNative.baziGetDaYunColumns(handle)?.toList() ?: emptyList()
+            val dyCols     = SxwnlNative.baziGetDaYunColumns(handle)?.toList() ?: emptyList()
+            daYunColumns   = dyCols
             wuXingCount    = SxwnlNative.baziGetWuXingCount(handle, true) ?: IntArray(5)
             wuXingStatus   = SxwnlNative.baziGetWuXingStatus(handle)
                 ?: arrayOf("", "", "", "", "")
             liuNian        = SxwnlNative.baziGetLiuNian(handle, startYear, 120)?.toList() ?: emptyList()
+
+            // 按大运分组的流年: 每个大运取 10 个流年, 与鸿蒙 NAPI liuNianAll 对齐.
+            //   12 个大运 × 10 流年 = 120 次 JNI 调用 — 单次开销 < 1ms, 总耗时
+            //   < 100ms, 用户感知不到. 出错的桶用空列表占位, 保持索引对齐.
+            liuNianAll = dyCols.map { col ->
+                if (col.startYear <= 0) emptyList()
+                else SxwnlNative.baziGetLiuNian(handle, col.startYear, 10)
+                    ?.toList() ?: emptyList()
+            }
         }
     }
 
@@ -193,5 +203,44 @@ object CalendarRepository {
     /** ditu2 大图国界 */
     suspend fun getWorldMapDitu2(): DoubleArray = withContext(Dispatchers.IO) {
         SxwnlNative.getWorldMapData(2) ?: DoubleArray(0)
+    }
+
+    // ═══ Almanac (老黄历) ═════════════════════════════════════
+    //
+    //   getAlmanac 是单日查询, 适合用户点开"详情"时按需调用. 不要在 monthData
+    //   遍历里逐天调用 — 每天查询有 5-10ms 开销, 一整月会拖慢首屏渲染.
+
+    suspend fun getAlmanac(year: Int, month: Int, day: Int): DayAlmanac? =
+        withContext(Dispatchers.IO) { SxwnlNative.getAlmanac(year, month, day) }
+
+    /**
+     * 静态知识 (董公总论/口诀/方位). 应用启动后调用一次即可常驻; 重复调用安全
+     * 但会重复拷贝~30 条记录.
+     */
+    suspend fun getAlmanacTopics(): List<AlmanacTopic> = withContext(Dispatchers.IO) {
+        SxwnlNative.getAlmanacTopics()?.toList() ?: emptyList()
+    }
+
+    // ═══ Geo (地理目录) ═══════════════════════════════════════
+
+    suspend fun geoListProvinces(): List<GeoProvince> = withContext(Dispatchers.IO) {
+        SxwnlNative.geoListProvinces()?.toList() ?: emptyList()
+    }
+
+    suspend fun geoListCities(province: String): List<GeoCity> = withContext(Dispatchers.IO) {
+        SxwnlNative.geoListCities(province)?.toList() ?: emptyList()
+    }
+
+    suspend fun geoSearch(keyword: String, limit: Int = 64): List<GeoCity> =
+        withContext(Dispatchers.IO) {
+            SxwnlNative.geoSearch(keyword, limit)?.toList() ?: emptyList()
+        }
+
+    suspend fun geoListTimezones(): List<TimezoneGroup> = withContext(Dispatchers.IO) {
+        SxwnlNative.geoListTimezones()?.toList() ?: emptyList()
+    }
+
+    suspend fun geoDefault(): GeoCity? = withContext(Dispatchers.IO) {
+        SxwnlNative.geoDefault()
     }
 }

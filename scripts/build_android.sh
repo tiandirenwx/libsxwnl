@@ -12,12 +12,17 @@
 #
 # 签名优先级 (release/aab):
 #   1) <repo>/android/keystore.properties (storeFile/storePassword/keyAlias/keyPassword)
+#      -> 用 scripts/gen_android_keystore.sh 一键生成
 #   2) 环境变量 SXWNL_KEYSTORE_PATH / SXWNL_KEYSTORE_PASSWORD /
 #                SXWNL_KEY_ALIAS / SXWNL_KEY_PASSWORD
 #   3) 回退到 ~/.android/debug.keystore (适合开发/内测; 不可上架商店)
+#      此时产物文件名带 -dbgkey 后缀以示区别
 #
 # 产物输出:
-#   <repo>/dist/sxwnl-android-<variant>.{apk,aab}
+#   <repo>/dist/sxwnl-android-debug.apk
+#   <repo>/dist/sxwnl-android-release.apk            (正式签名)
+#   <repo>/dist/sxwnl-android-release-dbgkey.apk     (debug 签名)
+#   <repo>/dist/sxwnl-android-release.aab
 #
 # 清理策略:
 #   - 默认每次打包前都会执行: ./gradlew clean + 删除 dist/sxwnl-android-*.{apk,aab}
@@ -52,20 +57,32 @@ case "$TARGET" in
 esac
 
 # ── 校验签名 (release/aab) ──
+# 返回 0 表示有正式签名, 1 表示回退到 debug 签名
+USING_DEBUG_KEYSTORE=0
 check_signing() {
     local ksprops="$ANDROID_DIR/keystore.properties"
     if [[ -f "$ksprops" ]]; then
+        local ksfile
+        ksfile="$(awk -F'=' '/^storeFile=/{print $2}' "$ksprops")"
         ok "使用项目级签名: $ksprops"
+        [[ -n "$ksfile" ]] && info "  -> keystore: $ANDROID_DIR/$ksfile"
+        return 0
     elif [[ -n "${SXWNL_KEYSTORE_PATH:-}" ]]; then
         ok "使用环境变量签名: $SXWNL_KEYSTORE_PATH"
+        return 0
     else
-        local debug_ks="$HOME/.android/debug.keystore"
-        if [[ -f "$debug_ks" ]]; then
-            warn "未配置正式签名, 回退到 debug.keystore (开发/内测可用, 不可上架商店)"
-            warn "  -> 自定义签名: 创建 $ksprops 或导出 SXWNL_KEYSTORE_PATH 等环境变量"
-        else
-            warn "未找到 debug.keystore, gradle 将在首次构建时自动创建"
-        fi
+        USING_DEBUG_KEYSTORE=1
+        warn ""
+        warn "╔════════════════════════════════════════════════════════════════╗"
+        warn "║  未配置正式签名, 将用 debug.keystore 给 release 包签名         ║"
+        warn "║                                                                ║"
+        warn "║  适用: 本机调试 / 给朋友试玩                                   ║"
+        warn "║  不适用: 上架商店 / 公开分发 / 长期维护的产品                  ║"
+        warn "║                                                                ║"
+        warn "║  生成正式 keystore: scripts/gen_android_keystore.sh            ║"
+        warn "╚════════════════════════════════════════════════════════════════╝"
+        warn ""
+        return 0
     fi
 }
 
@@ -78,6 +95,7 @@ clean_all() {
         return 0
     fi
     info "清理: 删除 dist/ 中 Android 旧产物"
+    # 通配符已经覆盖 sxwnl-android-release-dbgkey.apk 这种带后缀的产物
     rm -f "$DIST_DIR"/sxwnl-android-*.apk "$DIST_DIR"/sxwnl-android-*.aab 2>/dev/null || true
 
     info "清理: ./gradlew clean"
@@ -114,7 +132,12 @@ publish_apk() {
     else
         die "找不到 APK: $src_dir/app-*.apk"
     fi
-    local dst="$DIST_DIR/sxwnl-android-$variant.apk"
+    # release 若用 debug 签名, 文件名加 -dbgkey 后缀以示区别
+    local suffix=""
+    if [[ "$variant" == "release" && "$USING_DEBUG_KEYSTORE" == "1" ]]; then
+        suffix="-dbgkey"
+    fi
+    local dst="$DIST_DIR/sxwnl-android-${variant}${suffix}.apk"
     cp -f "$src_file" "$dst"
     ok "APK -> $dst ($(du -h "$dst" | cut -f1))"
 }
@@ -154,11 +177,18 @@ case "$TARGET" in
         ;;
     aab)
         check_signing
+        # AAB 仅用于 Google Play 上架, debug 签名一定通不过, 直接拒绝
+        if [[ "$USING_DEBUG_KEYSTORE" == "1" ]]; then
+            die "拒绝构建 AAB: 当前是 debug 签名, 上传到 Google Play 会被拒. 请先运行 scripts/gen_android_keystore.sh"
+        fi
         run_gradle bundleRelease
         publish_aab
         ;;
     all)
         check_signing
+        if [[ "$USING_DEBUG_KEYSTORE" == "1" ]]; then
+            die "拒绝构建 AAB: 当前是 debug 签名, 上传到 Google Play 会被拒. 请先运行 scripts/gen_android_keystore.sh"
+        fi
         run_gradle assembleDebug assembleRelease bundleRelease
         publish_apk debug
         publish_apk release
