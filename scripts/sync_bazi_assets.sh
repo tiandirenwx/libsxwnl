@@ -10,7 +10,7 @@
 #
 # 各端在编译前自动调用 (无需手动执行):
 #   Android  — app/build.gradle.kts preBuild
-#   iOS      — setup_xcode.sh --link-only / Xcode Run Script
+#   iOS      — setup_xcode.sh --link-only / Xcode Run Script (复制, actool 不识别符号链接)
 #   Harmony  — entry/hvigorfile.ts 加载时 (复制, 因 hvigor 不识别符号链接)
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
@@ -28,6 +28,7 @@ link_file() {
     local target_rel="$1"
     local link_path="$2"
     mkdir -p "$(dirname "$link_path")"
+    rm -f "$link_path"
     ln -sf "$target_rel" "$link_path"
 }
 
@@ -69,20 +70,19 @@ sync_harmony() {
 sync_ios() {
     local fonts="$ROOT_DIR/ios/SxwnlCalendar/SxwnlCalendar/Fonts"
     local xcassets="$ROOT_DIR/ios/SxwnlCalendar/SxwnlCalendar/Assets.xcassets"
-    local rel_font="../../../../assets/bazi"
-    local rel_img="../../../../../../assets/bazi"
 
     mkdir -p "$fonts"
-    link_file "$rel_font/WenYue.otf" "$fonts/WenYue.otf"
+    # actool / 字体注册需要实体文件, 符号链接不可用
+    copy_file "$SHARED/WenYue.otf" "$fonts/WenYue.otf"
 
     for f in "$SHARED"/bz_*.png; do
         [[ -e "$f" ]] || continue
         local name
         name="$(basename "$f" .png)"
-        link_file "$rel_img/$(basename "$f")" "$xcassets/${name}.imageset/$(basename "$f")"
+        copy_file "$f" "$xcassets/${name}.imageset/$(basename "$f")"
     done
-    link_file "$rel_img/bz_paper.jpg" "$xcassets/bz_paper.imageset/bz_paper.jpg"
-    echo "  ✓ iOS 共享资源已链接"
+    copy_file "$SHARED/bz_paper.jpg" "$xcassets/bz_paper.imageset/bz_paper.jpg"
+    echo "  ✓ iOS 共享资源已复制"
 }
 
 TARGET="${1:-all}"
