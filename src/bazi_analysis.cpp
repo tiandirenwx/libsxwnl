@@ -137,14 +137,41 @@ std::string naYin(int gan, int zhi) {
     return NaYinWuXing[n / 2];
 }
 
+void buildShiShenMap(int dayGan, int out[10]) {
+    for (int i = 0; i < 10; i++) out[i] = -1;
+    if (dayGan < 0 || dayGan > 9) return;
+    int j = dayGan;
+    if (j % 2 == 0) {
+        for (int i = 0; i < 10; i++) {
+            out[j] = i;
+            j = (j + 1) % 10;
+        }
+    } else {
+        for (int k = 0; k < 9; k += 2) {
+            out[j] = k;
+            out[j - 1] = k + 1;
+            j = (j + 2) % 10;
+        }
+    }
+}
+
+int shiShenIndex(int dayGan, int targetGan) {
+    if (dayGan < 0 || dayGan > 9 || targetGan < 0 || targetGan > 9) return -1;
+    int map[10];
+    buildShiShenMap(dayGan, map);
+    return map[targetGan];
+}
+
 // ─── 十神 ───
 std::string shiShen(int dayGan, int targetGan) {
-    if (dayGan < 0 || targetGan < 0) return "";
-    return ShiShen[(targetGan - dayGan + 10) % 10];
+    int idx = shiShenIndex(dayGan, targetGan);
+    if (idx < 0 || idx >= 10) return "";
+    return ShiShen[idx];
 }
 std::string shiShenShort(int dayGan, int targetGan) {
-    if (dayGan < 0 || targetGan < 0) return "";
-    return kShiShenShort[(targetGan - dayGan + 10) % 10];
+    int idx = shiShenIndex(dayGan, targetGan);
+    if (idx < 0 || idx >= 10) return "";
+    return kShiShenShort[idx];
 }
 
 // ─── 地支藏干(本气在前, 顺序同 gCangGan) ───

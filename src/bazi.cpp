@@ -2,6 +2,7 @@
 #include <sstream>
 #include <iomanip>
 #include "bazi.h"
+#include "bazi_analysis.h"
 #include "SSQ.h"
 #include "eph.h"
 #include "lunar_ob.h"
@@ -101,23 +102,16 @@ void BaziBase::calcBaziPaiPan()
 
 std::array<long double, 4> BaziBase::bkCalc(int year, int month, LiFaType lifa)
 {
-	auto monthTemp = month, yearTemp = year;
-	//定冬至
+	int yearTemp = year;
+	// 定冬至: 以冬至为气历起点, 公历 1–11 月归属上一年气历
 	if (lifa == YuWuWeiZiPingLifa_DingDongZhi)
 	{
-		monthTemp = 12;
 		yearTemp = year - 1;
 	}
-	//定夏至
+	// 定夏至: 以夏至为气历起点, 公历 1–6 月归属上一年气历
 	else if (lifa == YuWuWeiZiPingLifa_DingXiaZhi && month < 7)
 	{
 		yearTemp = year - 1;
-		monthTemp = 6;
-	}
-	else if (lifa == YuWuWeiZiPingLifa_DingXiaZhi && month >= 7)
-	{
-		yearTemp = year;
-		monthTemp = 6;
 	}
 
 	// 使用SSQ类精确计算中气
@@ -166,10 +160,11 @@ std::array<long double, 4> BaziBase::bkCalc(int year, int month, LiFaType lifa)
 	}
 	
 	std::array<long double,4> z{};
-	z[0] = (zq - pzq) / 12.0; //k，当年平气间隔
-	z[1] = pzq + z[0] / 2.0;  //b，当年第一个节气小寒（从pzq即yearTemp年冬至开始算）
-	z[2] = (nzq - zq) / 12.0; //k1，下年平气间隔
-	z[3] = zq + z[2]/2.0;     //b1，下一年第一个节气小寒（从zq即yearTemp+1年冬至开始算）
+	z[0] = (zq - pzq) / 12.0; // k，当年平气间隔
+	// b: 定冬至=小寒, 定夏至=小暑 (中气后第一个节)
+	z[1] = pzq + z[0] / 2.0;
+	z[2] = (nzq - zq) / 12.0; // k1，下年平气间隔
+	z[3] = zq + z[2] / 2.0;   // b1: 下一年度首个节(小寒/小暑)
 
 	return z;
 }
@@ -238,18 +233,27 @@ std::tuple<int, double, double> BaziBase::calcJieQiTermsByPingQi()
     else if (b <= mBdJd_ && mBdJd_ < b1)
     {
         auto n = std::floor((mBdJd_ - b) / k);
+        // 由于 k(当年) 与 k1(下年) 因日心运动不匀而有微差,
+        // 会产生 [b+12k, b1) 的一段"隙缝"(通常十几秒到几分钟),
+        // 若 mBdJd 落在隙缝内, floor 可能得到 n=12, 使 index=13,
+        // 与下面 ELSE 分支的 index=13 冲突, 导致月柱无法切换.
+        // 此处把 n 限制在 [0,11]: 位于隙缝内视作 "第 12 个节 (index=12)
+        // 已开始, 而月末应对齐下年首节 b1".
+        if (n >= 12) n = 11;
         D = k * n + b;
         index = int(n) + 1;
         mHeadJieQiJd_ = D;
-        mTailJieQiJd_ = D + k;
+        // 若当前为最后一个节 (index=12), 月末节即下年首节 b1
+        // (而非 b + 12k, 后者不精确, 会与 ELSE 分支的 head 存在数秒空隙).
+        mTailJieQiJd_ = (index == 12) ? b1 : (D + k);
     }
     else
     {
         auto n = std::floor((mBdJd_ - b1) / k1);
         D = k1 * n + b1;
-        mHeadJieQiJd_ = b1;
-        mTailJieQiJd_ = b1 + k1;
-        index = 13;
+        mHeadJieQiJd_ = D;
+        mTailJieQiJd_ = D + k1;
+        index = 13 + int(n);
     }
 
     if (mIsAst_)
@@ -267,15 +271,21 @@ std::tuple<int, double, double> BaziBase::calcJieQiTermsByPingQi()
     if (mLifa_ == YuWuWeiZiPingLifa_DingXiaZhi)
     {
         // 1. 修正年界 lichun
-        // 原始 lichun 是立秋(b+k)。减去半年回到同年的立春。
-        lichun -= 182.62;
-        
-        // 如果 index >= 8 (寅月/立春)，说明虽然计算基准是上一年(导致 lichun 也是上一年)，
-        // 但实际时间已经跨入下一年。为了让外部能正确判定年柱，需要把 lichun 推到下一年。
-        // (注: index 是相对于芒种的月数。芒种=0 ... 立春=8)
+        //  以精确的 k(=平气节间隔) 计算, 避免使用 182.62/365.2422 常数
+        //  因常数与实际 12*k 存在秒级到分钟级差, 会导致年柱和月柱在
+        //  立春交接时不同步切换 (BC 及远古年份尤其明显).
+        //
+        //  b 是 小暑(yearTemp 年 7 月节). 立春 平气 位置:
+        //    * yearTemp 年立春   = b - 5k  (5 个节向前:小暑→立春 反向 5 步)
+        //    * yearTemp+1 年立春 = b + 7k  (7 个节向后)
+        //  index 是 raw index (n+1), 立春 raw index = 8, 即 n>=7.
         if (index >= 8)
         {
-            lichun += 365.2422;
+            lichun = b + 7 * k;  // yearTemp+1 年立春 (与 D@n=7 对齐)
+        }
+        else
+        {
+            lichun = b - 5 * k;  // yearTemp 年立春
         }
 
         // 2. 修正月柱 index
@@ -331,44 +341,82 @@ void BaziBase::calcJiaoYunDate(bool flag)
 
 void BaziBase::calcJieQiTermsByDingQi()
 {
-    auto year = mSolarYear_;
-    auto month = mSolarMonth_;
-    auto day = mSolarDay_;
-    auto jd = mBdJd_;
-    auto jqjd = getJieByDingQi(year, month);
-    if (jqjd > jd)
-    {
-        long double jqjdPre = jd;
-        while (jd <= jqjdPre)
-        {
-            month--;
-            if (month < 1)
-            {
-                year--;
-                month = 12; 
-            }
-            jqjdPre = getJieByDingQi(year, month);
-        }
-        mHeadJieQiJd_ = jqjdPre;
-        mTailJieQiJd_ = jqjd;
-    }
-    else
-    {
-        long double jqjdNext = jd;
-        while (jd >= jqjdNext)
-        {
-            month++;
-            if (month > 12)
-            {
-                year++;
-                month = 1;
-            }
-            jqjdNext = getJieByDingQi(year, month);
-        }
+    // 直接使用 SSQ vecZQ (25 项, 从当期 冬至 到 下期 冬至),
+    // 从中找出与 mBdJd_ 相邻的两个 "节" (奇数索引).
+    //
+    // 原实现用 getJieByDingQi(year, month) 逐月扫描, 只能返回该
+    // 公历月中"第一个"节. 当 Julian/公历 月里恰好含有两个节时
+    // (远古或 Julian 年份, 如 900-01 Julian 同时含 小寒 与 立春),
+    // 该实现会错过第二个节, 造成 head 与真正的月柱不一致.
+    long double jdOff = mBdJd_ - J2000;   // vecZQ 存储的是 J2000 偏移量
 
-        mHeadJieQiJd_ = jqjd;
-        mTailJieQiJd_ = jqjdNext; 
+    SSQ &ssq = SSQ::getInstance();
+    std::vector<long double> vecZQ = ssq.getZhongQi();
+    // 若当前 vecZQ 未覆盖 jdOff, 重新计算
+    if (vecZQ.empty() || jdOff < vecZQ[0] || jdOff >= vecZQ[24])
+    {
+        ssq.calcY(int2(jdOff));
+        vecZQ = ssq.getZhongQi();
     }
+
+    // vecZQ 内奇数索引 (1,3,5,...,23) 为 12 节.
+    // 对每个节做 qi_accurate2 精化, 得到绝对 JD (加 J2000).
+    long double head = 0, tail = 0;
+    bool haveHead = false, haveTail = false;
+    for (int i = 1; i <= 23; i += 2)
+    {
+        long double jNode = qi_accurate2(vecZQ[i], false, 120) + J2000;
+        if (jNode <= mBdJd_)
+        {
+            head = jNode;
+            haveHead = true;
+        }
+        else
+        {
+            tail = jNode;
+            haveTail = true;
+            break;
+        }
+    }
+    // mBdJd_ 早于本期首个节: 计算上一期
+    if (!haveHead)
+    {
+        // 位移 300 天回退, 覆盖前一个 冬至→冬至 周期
+        ssq.calcY(int2(jdOff) - 300);
+        auto vecZQPrev = ssq.getZhongQi();
+        for (int i = 23; i >= 1; i -= 2)
+        {
+            long double jNode = qi_accurate2(vecZQPrev[i], false, 120) + J2000;
+            if (jNode <= mBdJd_)
+            {
+                head = jNode;
+                haveHead = true;
+                break;
+            }
+        }
+        // 恢复原 vecZQ 状态
+        ssq.calcY(int2(jdOff));
+    }
+    // mBdJd_ 晚于本期末尾节: 计算下一期
+    if (!haveTail)
+    {
+        ssq.calcY(int2(jdOff) + 300);
+        auto vecZQNext = ssq.getZhongQi();
+        for (int i = 1; i <= 23; i += 2)
+        {
+            long double jNode = qi_accurate2(vecZQNext[i], false, 120) + J2000;
+            if (jNode > mBdJd_)
+            {
+                tail = jNode;
+                haveTail = true;
+                break;
+            }
+        }
+        ssq.calcY(int2(jdOff));
+    }
+
+    mHeadJieQiJd_ = head;
+    mTailJieQiJd_ = tail;
 
     if (mIsAst_)
     {
@@ -483,26 +531,10 @@ void BaziBase::calcPingQiPaiPan()
     arraySiZhu_[7] = shiZhu % 12;
     if (arraySiZhu_[7] < 0) arraySiZhu_[7] += 12;
 
-    auto j = arraySiZhu_[4];
-    if (j % 2 == 0)
-    {
-        for (auto i = 0; i < 10; i++)
-        {
-            vecShiShen_[j] = i;
-            j += 1;
-            j %= 10;
-        }
-    }
-    else
-    {
-        for (auto k = 0; k < 9; k += 2)
-        {
-            vecShiShen_[j] = k;
-            vecShiShen_[j - 1] = k + 1;
-            j += 2;
-            j %= 10;
-        }
-    }
+    int ssMap[10];
+    bazi::buildShiShenMap(arraySiZhu_[4], ssMap);
+    for (int i = 0; i < 10; i++)
+        vecShiShen_[i] = ssMap[i];
     vecShiShen_.push_back(10);
     auto isFemale = 0;
     if (mGender_)
@@ -558,27 +590,10 @@ void BaziBase::calcDingQiPaiPan()
     if (arraySiZhu_[6] < 0) arraySiZhu_[6] += 10;
     arraySiZhu_[7] = v % 12;
     if (arraySiZhu_[7] < 0) arraySiZhu_[7] += 12;
-    // 十神
-    auto j = arraySiZhu_[4];
-    if (j % 2 == 0)
-    {
-        for (auto i = 0; i < 10; i++)
-        {
-            vecShiShen_[j] = i;
-            j += 1;
-            j %= 10;
-        }
-    }
-    else
-    {
-        for (auto p = 0; p < 9; p += 2)
-        {
-            vecShiShen_[j] = p;
-            vecShiShen_[j - 1] = p + 1;
-            j += 2;
-            j %= 10;
-        }
-    }
+    int ssMap[10];
+    bazi::buildShiShenMap(arraySiZhu_[4], ssMap);
+    for (int i = 0; i < 10; i++)
+        vecShiShen_[i] = ssMap[i];
     vecShiShen_.push_back(10);
     auto isFemale = 0;
     if (mGender_)

@@ -34,6 +34,10 @@ int  jiaZiIndex(int gan, int zhi); // 干支 → 六十甲子序号 [0,59], 非�
 
 // ─── 派生信息 ───
 std::string naYin(int gan, int zhi);                 // 纳音, 例 "海中金"
+// 十神索引表: out[gan] = ShiShen 下标, 与 BaziBase::vecShiShen_ 建表规则一致
+void buildShiShenMap(int dayGan, int out[10]);
+int  shiShenIndex(int dayGan, int targetGan);         // 查表, 非法返回 -1
+
 std::string shiShen(int dayGan, int targetGan);      // 十神全称
 std::string shiShenShort(int dayGan, int targetGan); // 十神简称
 std::vector<int> cangGan(int zhi);                   // 地支藏干(顺序同 gCangGan)

@@ -24,13 +24,17 @@ link_cpp_sources() {
     # 使用相对路径符号链接, 克隆到任意目录均可编译
     for f in "$ROOT_DIR/src"/*.cpp "$ROOT_DIR/src"/*.h; do
         [[ -e "$f" ]] || continue
-        ln -sf "../../../../src/$(basename "$f")" "$xcode_src/"
+        dest="$xcode_src/$(basename "$f")"
+        rm -f "$dest"
+        ln -sf "../../../../src/$(basename "$f")" "$dest"
     done
     # capi/: 排除 test_*.cpp (含 main(), 会与 App 入口冲突)
     for f in "$ROOT_DIR/capi"/*.cpp "$ROOT_DIR/capi"/*.h; do
         [[ -e "$f" ]] || continue
         [[ "$(basename "$f")" == test_* ]] && continue
-        ln -sf "../../../../capi/$(basename "$f")" "$xcode_src/"
+        dest="$xcode_src/$(basename "$f")"
+        rm -f "$dest"
+        ln -sf "../../../../capi/$(basename "$f")" "$dest"
     done
     echo "  ✓ C++ 源码已链接到 $xcode_src"
 }

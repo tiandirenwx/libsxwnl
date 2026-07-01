@@ -1,6 +1,6 @@
 # test/CMakeLists.txt
 
-# 收集test目录下的所有.cpp文件作为测试程序的源文件
+# 收集test目录下的所有.cpp文件作为测试程序的源文件 (排除子目录内容)
 file(GLOB TEST_SRC_FILES "*.cpp")
 
 # 添加测试程序的可执行文件
@@ -17,3 +17,6 @@ target_include_directories(test_sxwnl PRIVATE ${PROJECT_SOURCE_DIR}/src)
 set_target_properties(test_sxwnl PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
+
+# 添加子目录 (平气/定气 节气边界测试)
+add_subdirectory(pingqi_dingqi)

@@ -118,6 +118,16 @@ public:
     bool getGenderIsFemale() const { return mGender_; } // true=女
     int  getDaysAfterJie() const;                       // 出生距本月节令的天数
 
+    // 出生月首/末节的儒略日(JD): 平太阳时口径 (mBdJd 时基)
+    long double getHeadJieQiJd() const { return mHeadJieQiJd_; }
+    long double getTailJieQiJd() const { return mTailJieQiJd_; }
+    // 出生月首/末节的儒略日(JD): 真太阳时口径 (mAstJd 时基, isAst=false 时同上)
+    long double getHeadJieQiAstJd() const { return mHeadJieQiAstJd_; }
+    long double getTailJieQiAstJd() const { return mTailJieQiAstJd_; }
+    // 出生时刻 JD (平太阳时/真太阳时)
+    long double getBirthJd() const { return mBdJd_; }
+    long double getBirthAstJd() const { return mAstJd_; }
+
 private:
     void calcPingQiPaiPan();
     void calcDingQiPaiPan();

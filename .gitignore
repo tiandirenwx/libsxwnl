@@ -362,3 +362,16 @@ scratch/
 playground/
 TODO.local.md
 NOTES.local.md
+
+# ─────────────────────────────────────────────
+# 12. 测试目录生成产物 (test/pingqi_dingqi/ 等)
+# ─────────────────────────────────────────────
+# 测试运行时生成的日志/报告 (保留源码 .cpp/.h 和 CMakeLists.txt)
+test/**/*.log
+test/**/test_output/
+test/**/results/
+# 测试目录内临时编译的可执行文件 (无扩展名)
+test/pingqi_dingqi/pingqi_dingqi_test
+!test/pingqi_dingqi/*.cpp
+!test/pingqi_dingqi/*.h
+!test/pingqi_dingqi/CMakeLists.txt

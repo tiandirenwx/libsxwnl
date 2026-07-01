@@ -87,7 +87,7 @@ ios/SxwnlCalendar/
 
 ## 共享 UI 资源 (八字页)
 
-字体 `WenYue.otf`、12 张生肖图、`bz_paper.jpg` 仅在仓库根 `assets/bazi/` 保留一份。三端编译前由 `scripts/sync_bazi_assets.sh` 自动同步到各平台资源目录（Android/iOS 符号链接，鸿蒙复制实体文件；均由构建流程自动触发），换机器 clone 后直接编译即可，无需手动操作。
+字体 `WenYue.otf`、12 张生肖图、`bz_paper.jpg` 仅在仓库根 `assets/bazi/` 保留一份。三端编译前由 `scripts/sync_bazi_assets.sh` 自动同步（Android 符号链接；鸿蒙/iOS 复制实体文件，因打包工具不识别符号链接）；均由构建流程自动触发。
 
 ## 兼容性提示
 
