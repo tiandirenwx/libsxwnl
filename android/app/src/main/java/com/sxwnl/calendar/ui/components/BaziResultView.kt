@@ -308,7 +308,14 @@ private fun SimpleReport(
             .border(1.dp, GoldLine, RoundedCornerShape(10.dp))
             .background(PaperBg) // 兜底纸色, 防止图片未加载时露白
     ) {
-        // ── 底层: 宣纸纹理背景图 ──────────────────────────────
+        // 三层结构 (对齐鸿蒙 simpleReport() + Python Bazi.py 原版命书):
+        //   ① 底: 宣纸 bz_paper (matchParentSize, 只在 Column 决定 Box 尺寸后按父尺寸铺满, 不撑高 Box)
+        //   ② 中: 生肖印 bz_<zodiac> (240dp, 以 Box 中心居中, alpha=1.0)
+        //   ③ 顶: 命书正文 (Column, 唯一决定 Box 高度, 文字覆盖生肖印之上)
+        // 说明: 生肖 PNG 本身水墨风格 (大量透明像素), 不再二次降透明度,
+        //      视觉与 Python img.paste(zodiac, mask=zodiac) 一致.
+
+        // ① 底: 宣纸背景图 (matchParentSize 不参与父测量, Box 高度仍由 Column 决定)
         Image(
             painter = painterResource(R.drawable.bz_paper),
             contentDescription = null,
@@ -316,7 +323,18 @@ private fun SimpleReport(
             modifier = Modifier.matchParentSize()
         )
 
-        // ── 上层: 命书正文 ────────────────────────────────────
+        // ② 中: 生肖印 (以卡片中心居中)
+        Image(
+            painter = painterResource(zodiacRes),
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            alpha = 1.0f,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .size(240.dp)
+        )
+
+        // ③ 顶: 命书正文
         Column(
             Modifier
                 .fillMaxWidth()
@@ -368,17 +386,6 @@ private fun SimpleReport(
 
             DaYunGrid(arg)
         }
-
-        // ── 顶层水印: 当年生肖图, 透明度 7% ──────────────────
-        Image(
-            painter = painterResource(zodiacRes),
-            contentDescription = null,
-            contentScale = ContentScale.Fit,
-            alpha = 0.07f,
-            modifier = Modifier
-                .align(Alignment.Center)
-                .size(220.dp)
-        )
     }
 }
 

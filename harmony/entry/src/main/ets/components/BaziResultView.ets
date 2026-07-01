@@ -187,59 +187,74 @@ export struct BaziResultView {
 
   @Builder
   simpleReport() {
-    // 纸张用"背景图"贴在内容列上: 卡片高度严格等于内容高度, 不会被图片比例撑高;
-    // 水印用 position 叠在上层, 不参与布局测量。
-    Stack({ alignContent: Alignment.TopStart }) {
-      Column() {
-        // 抬头品牌
-        Row() {
-          Blank()
-          Text('☯ 八字命书').fontSize(13).fontColor(this.redColor).fontWeight(FontWeight.Bold)
-        }.width('100%').margin({ bottom: 10 })
+    // 结构 (完全等价于"改动前"稳定版, 只在其内部嵌入生肖印图层):
+    //   外层 Column: 决定卡片高度 + 挂宣纸背景 (.backgroundImage, 不占布局)
+    //   内层 Stack: 生肖印 (position 居中, 脱离布局) 与 文字 Column 并列
+    // 层级: 宣纸(Column.background) → 生肖(Stack 第一子) → 文字(Stack 第二子, 在上)
+    // 高度由文字 Column 自然决定, 不会被宣纸/生肖撑高.
+    // 生肖 PNG 本身即水墨风格 (大量透明像素), opacity=1.0 用图自身 alpha 混合,
+    // 视觉与 Python img.paste(zodiac, (28,150), mask=zodiac) 一致.
+    Column() {
+      Stack({ alignContent: Alignment.TopStart }) {
+        // ① 生肖印 (以自身中心为锚点, 定位到 Stack 中心)
+        //   ArkUI 里 .align() 只影响子内部内容对齐, 不影响子在父 Stack 中的位置;
+        //   必须用 .position({x:'50%',y:'50%'}) + .markAnchor({x:'50%',y:'50%'}).
+        Image(this.zodiacRes())
+          .width(240).height(240)
+          .objectFit(ImageFit.Contain)
+          .opacity(1.0)
+          .position({ x: '50%', y: '50%' })
+          .markAnchor({ x: '50%', y: '50%' })
 
-        // ── 命主信息 ──
-        this.infoPair('姓名', this.strip(this.arg.result.userName), false,
-          '性别', this.arg.result.gender !== undefined && this.arg.result.gender.indexOf('女') >= 0 ? '女' : '男')
-        this.infoPair('生肖', this.strip(this.arg.result.shengXiao), false, '年龄', this.strip(this.arg.result.age))
-        this.infoPair('出生地', `东经${this.arg.longitude.toFixed(2)}° 北纬${this.arg.latitude.toFixed(2)}°`, false,
-          '时间标准', this.arg.astEnabled ? '真太阳时' : '北京时间(120°E)')
-        Row() {
-          Text('『公历生日』').fontSize(13).fontColor(this.inkSoft)
-          Text(this.strip(this.arg.result.solarBirth)).fontSize(13).fontColor(this.inkColor).margin({ left: 2 }).layoutWeight(1)
-        }.width('100%').margin({ bottom: 4 })
-        Row() {
-          Text('『农历生日』').fontSize(13).fontColor(this.inkSoft)
-          Text(this.strip(this.arg.result.lunarBirth)).fontSize(13).fontColor(this.redColor).margin({ left: 2 }).layoutWeight(1)
-        }.width('100%').margin({ bottom: 8 })
+        // ② 命书正文 (决定 Stack 高度, 覆盖生肖印之上)
+        Column() {
+          // 抬头品牌
+          Row() {
+            Blank()
+            Text('☯ 八字命书').fontSize(13).fontColor(this.redColor).fontWeight(FontWeight.Bold)
+          }.width('100%').margin({ bottom: 10 })
 
-        // ── 节气/司令 段落 ──
-        Text(this.jieQiParagraph())
-          .fontSize(12).fontColor(this.inkSoft).width('100%').lineHeight(20).margin({ bottom: 10 })
+          // ── 命主信息 ──
+          this.infoPair('姓名', this.strip(this.arg.result.userName), false,
+            '性别', this.arg.result.gender !== undefined && this.arg.result.gender.indexOf('女') >= 0 ? '女' : '男')
+          this.infoPair('生肖', this.strip(this.arg.result.shengXiao), false, '年龄', this.strip(this.arg.result.age))
+          this.infoPair('出生地', `东经${this.arg.longitude.toFixed(2)}° 北纬${this.arg.latitude.toFixed(2)}°`, false,
+            '时间标准', this.arg.astEnabled ? '真太阳时' : '北京时间(120°E)')
+          Row() {
+            Text('『公历生日』').fontSize(13).fontColor(this.inkSoft)
+            Text(this.strip(this.arg.result.solarBirth)).fontSize(13).fontColor(this.inkColor).margin({ left: 2 }).layoutWeight(1)
+          }.width('100%').margin({ bottom: 4 })
+          Row() {
+            Text('『农历生日』').fontSize(13).fontColor(this.inkSoft)
+            Text(this.strip(this.arg.result.lunarBirth)).fontSize(13).fontColor(this.redColor).margin({ left: 2 }).layoutWeight(1)
+          }.width('100%').margin({ bottom: 8 })
 
-        Divider().color(this.goldLine).opacity(0.6).margin({ bottom: 10 })
+          // ── 节气/司令 段落 ──
+          Text(this.jieQiParagraph())
+            .fontSize(12).fontColor(this.inkSoft).width('100%').lineHeight(20).margin({ bottom: 10 })
 
-        // ── 四柱(主星/天干/地支/藏干) ──
-        this.siZhuBlock()
+          Divider().color(this.goldLine).opacity(0.6).margin({ bottom: 10 })
 
-        Divider().color(this.goldLine).opacity(0.6).margin({ top: 6, bottom: 10 })
+          // ── 四柱(主星/天干/地支/藏干) ──
+          this.siZhuBlock()
 
-        // ── 起运/交运 段落 ──
-        Text(`${this.strip(this.arg.result.qiYun)}　${this.strip(this.arg.result.jiaoYun)}`)
-          .fontSize(12).fontColor(this.inkSoft).width('100%').lineHeight(20).margin({ bottom: 10 })
+          Divider().color(this.goldLine).opacity(0.6).margin({ top: 6, bottom: 10 })
 
-        // ── 大运 / 流年 网格 ──
-        Text('大运 / 流年').fontSize(13).fontWeight(FontWeight.Bold).fontColor(this.inkColor)
-          .width('100%').margin({ bottom: 6 })
-        this.daYunGrid()
+          // ── 起运/交运 段落 ──
+          Text(`${this.strip(this.arg.result.qiYun)}　${this.strip(this.arg.result.jiaoYun)}`)
+            .fontSize(12).fontColor(this.inkSoft).width('100%').lineHeight(20).margin({ bottom: 10 })
+
+          // ── 大运 / 流年 网格 ──
+          Text('大运 / 流年').fontSize(13).fontWeight(FontWeight.Bold).fontColor(this.inkColor)
+            .width('100%').margin({ bottom: 6 })
+          this.daYunGrid()
+        }.width('100%')
       }
-      .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 12 })
-      .backgroundImage($r('app.media.bz_paper'), ImageRepeat.NoRepeat)
-      .backgroundImageSize(ImageSize.Cover)
-
-      // 太极/生肖 水印(position 绝对定位, 不影响卡片高度)
-      Image(this.zodiacRes()).width(200).height(200).opacity(0.07)
-        .objectFit(ImageFit.Contain).position({ x: 80, y: 220 })
+      .width('100%')
     }
+    .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 12 })
+    .backgroundImage($r('app.media.bz_paper'), ImageRepeat.NoRepeat)
+    .backgroundImageSize(ImageSize.Cover)
     .id('baziSimpleCard')
     .width('100%')
     .margin({ left: AppDimens.PADDING_MD, right: AppDimens.PADDING_MD, top: AppDimens.PADDING_MD })

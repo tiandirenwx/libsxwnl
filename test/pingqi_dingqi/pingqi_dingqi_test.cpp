@@ -29,7 +29,7 @@
 //   ./build/bin/pingqi_dingqi_test -full                     # 完整 -722 ~ 9999 (10711 年)
 //   ./build/bin/pingqi_dingqi_test -full -fast               # 完整范围 + 加速 (仅核心3项)
 //   ./build/bin/pingqi_dingqi_test -range -722 9999 -fast    # 自定义范围
-//   ./build/bin/pingqi_dingqi_test -full -progress 500       # 每 500 年输出进度
+//   ./build/bin/pingqi_dingqi_test -full -progress 10        # 每 10 年输出进度 (默认 50)
 //
 // 完整范围预估时间 (单机, 8核):
 //   全量 6 项测试: 约 70 分钟 (32秒/246组合 → 32*10711*3/246 ≈ 4173秒)
@@ -809,11 +809,11 @@ int main(int argc, char *argv[])
     // 完整范围模式: -full       => 扫描 -722 ~ 9999 每一年
     // 自定义范围:   -range S E  => 扫描 [S, E] 每一年
     // 加速模式:     -fast       => 跳过真太阳时/农历/距节令测试, 仅保留核心节气+日柱+时柱
-    // 进度输出:     -progress N => 每 N 年输出一次进度 (默认 100)
+    // 进度输出:     -progress N => 每 N 年输出一次进度 (默认 50, 且前 3 年强制输出)
     bool fullMode = false;
     bool fastMode = false;
     int  rangeStart = 0, rangeEnd = 0;
-    int  progressEvery = 100;
+    int  progressEvery = 50;
     for (int i = 1; i < argc; ++i)
     {
         std::string s = argv[i];
@@ -875,7 +875,9 @@ int main(int argc, char *argv[])
                      s, e, years.size());
         if (fastMode)
             std::fprintf(stderr, "加速模式: 跳过真太阳时/农历/距节令测试\n");
-        std::fprintf(stderr, "进度: 每 %d 年输出一次\n\n", progressEvery);
+        std::fprintf(stderr, "进度: 每 %d 年输出一次 (前 3 年强制输出以证明推进)\n\n",
+                     progressEvery);
+        std::fflush(stderr);
     }
     else
     {
@@ -945,6 +947,7 @@ int main(int argc, char *argv[])
     for (LiFaType lifa : modes)
     {
         std::printf("\n==== 立法: %s ====\n", lifaName(lifa).c_str());
+        std::fflush(stdout);  // 避免 pipe/tee 时块缓冲吞掉表头
         int yIdx = 0;
         for (int Y : years)
         {
@@ -967,7 +970,10 @@ int main(int argc, char *argv[])
                 verifyDaysAfterJie(Y, lifa, rep);
             }
             // 完整模式进度输出 (stderr, 不污染 stdout 汇总)
-            if (fullMode && (yIdx % progressEvery == 0))
+            // 前 3 年无条件输出, 让用户尽早看到 "程序正在推进";
+            // 之后按 progressEvery 节拍输出.
+            bool forceEarly = fullMode && yIdx <= 3;
+            if (fullMode && (forceEarly || yIdx % progressEvery == 0))
             {
                 auto tNow = std::time(nullptr);
                 std::fprintf(stderr,
@@ -976,6 +982,7 @@ int main(int argc, char *argv[])
                     100.0 * yIdx / years.size(), Y,
                     rep.okChecks, (int)rep.issues.size(),
                     (long)(tNow - tBegin));
+                std::fflush(stderr);
             }
         }
     }

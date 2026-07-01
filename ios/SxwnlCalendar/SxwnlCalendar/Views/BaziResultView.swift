@@ -218,7 +218,16 @@ struct BaziResultView: View {
             daYunGrid
         }
         .padding(.horizontal, 16).padding(.vertical, 14)
-        // 背景: 宣纸纹理图 (兜底纯色); 中部叠 12 生肖水印
+        // 背景三层 (对齐鸿蒙 simpleReport() + Python Bazi.py 原版命书):
+        //   ① 底: 宣纸兜底纯色 + 宣纸纹理图 bz_paper (scaledToFill 铺满)
+        //   ② 中: 生肖印 bz_<zodiac> (以卡片中心居中, opacity=1.0)
+        // 说明:
+        //  - .background(ZStack{...}) 是 SwiftUI 的"背景修饰符", 只绘制不参与外层布局,
+        //    卡片高度仍由 VStack 内容自然决定 (与鸿蒙 Column.backgroundImage 语义一致).
+        //  - ZStack 默认 alignment=.center, 生肖 240x240 会自动居中在卡片中心;
+        //    paperBg (Color)/bz_paper (scaledToFill+clipped) 会填满 ZStack 可用空间, 不受 alignment 影响.
+        //  - 生肖 PNG 本身水墨风格 (大量透明像素), opacity=1.0 用图自身 alpha 通道混合,
+        //    视觉与 Python img.paste(zodiac, mask=zodiac) 一致.
         .background(
             ZStack {
                 paperBg
@@ -229,8 +238,8 @@ struct BaziResultView: View {
                 Image(zodiacName())
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 220, height: 220)
-                    .opacity(0.07)
+                    .frame(width: 240, height: 240)
+                    .opacity(1.0)
             }
         )
         .overlay(RoundedRectangle(cornerRadius: 10)
