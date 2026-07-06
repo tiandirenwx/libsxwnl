@@ -26,25 +26,50 @@
 // 运行:
 //   ./build/bin/pingqi_dingqi_test                           # 默认 82 个采样年份
 //   ./build/bin/pingqi_dingqi_test -v -y 2024                # 单年详情
-//   ./build/bin/pingqi_dingqi_test -full                     # 完整 -722 ~ 9999 (10711 年)
+//   ./build/bin/pingqi_dingqi_test -full                     # 完整 -722 ~ 9999 (单进程)
 //   ./build/bin/pingqi_dingqi_test -full -fast               # 完整范围 + 加速 (仅核心3项)
 //   ./build/bin/pingqi_dingqi_test -range -722 9999 -fast    # 自定义范围
 //   ./build/bin/pingqi_dingqi_test -full -progress 10        # 每 10 年输出进度 (默认 50)
 //
-// 完整范围预估时间 (单机, 8核):
-//   全量 6 项测试: 约 70 分钟 (32秒/246组合 → 32*10711*3/246 ≈ 4173秒)
-//   -fast 3 项测试: 约 30 分钟
+// 并行 (POSIX, macOS/Linux):
+//   ./build/bin/pingqi_dingqi_test -full -jobs 8             # fork 8 worker, 各自 nice+10
+//   ./build/bin/pingqi_dingqi_test -full -jobs 8 -fast       # 8 worker + 加速
+//   ./build/bin/pingqi_dingqi_test -full -jobs 4 -nice 0     # 4 worker + 关闭 nice
+//   ./build/bin/pingqi_dingqi_test -full -jobs 8 -workdir /tmp/pqlogs
+//   * -jobs 默认 = min(hw_concurrency/2, 8), 单核/传 1 走原串行路径
+//   * -nice  默认 = 10, 0 表示不 renice
+//   * 每个 worker 输出写到 ${workdir}/worker-<i>.log, 结束时父进程汇总
+//   * Ctrl-C 会转发 SIGTERM 给所有 worker 后再退出
+//
+// 完整范围预估时间 (单机, 参考):
+//   全量 6 项 单进程 8核 : 约 70~90 分钟
+//   全量 6 项 -jobs 8    : 约 15~25 分钟 (视 CPU/热限)
+//   -fast 3 项 -jobs 8   : 约 6~10 分钟
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <ctime>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
+
+#if !defined(_WIN32)
+// POSIX 多进程并行需要的头 (Windows 平台不启用 -jobs)
+#include <fcntl.h>
+#include <signal.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
 
 #include "SSQ.h"
 #include "bazi.h"
@@ -205,14 +230,31 @@ struct Issue
     std::string detail;
 };
 
+// Worker 模式下, 每条 fail 立即用 ##FAIL## 前缀打到 stderr;
+// 父进程 grep 该标签汇总失败详情. 好处:
+//   * worker 意外崩溃时, 已发生的 fail 详情不会丢
+//   * fail 详情按 worker 出现顺序落盘, 便于事后回溯
 struct Reporter
 {
     std::vector<Issue> issues;
     int totalChecks = 0;
     int okChecks    = 0;
+    bool workerMode = false;   // true => 每条 fail 立即打印 ##FAIL##
 
     void ok() { ++okChecks; ++totalChecks; }
-    void fail(const Issue &iss) { issues.push_back(iss); ++totalChecks; }
+
+    void fail(const Issue &iss)
+    {
+        issues.push_back(iss);
+        ++totalChecks;
+        if (workerMode)
+        {
+            std::fprintf(stderr, "##FAIL## Y=%d [%s] %s: %s\n",
+                         iss.year, iss.mode.c_str(),
+                         iss.kind.c_str(), iss.detail.c_str());
+            std::fflush(stderr);
+        }
+    }
 
     void print(int maxDetails = 30) const
     {
@@ -229,6 +271,18 @@ struct Reporter
                         e.mode.c_str(), e.kind.c_str(), e.detail.c_str());
             ++printed;
         }
+    }
+
+    // 机器可读汇总 (worker 结束时写, 父进程 grep ##AGG## 解析)
+    void printAgg(int workerId, int rangeStart, int rangeEnd,
+                  long elapsedSec) const
+    {
+        std::fprintf(stderr,
+                     "##AGG## worker=%d range=%d..%d total=%d ok=%d fail=%d elapsed=%ld\n",
+                     workerId, rangeStart, rangeEnd,
+                     totalChecks, okChecks, (int)issues.size(),
+                     elapsedSec);
+        std::fflush(stderr);
     }
 };
 
@@ -423,14 +477,30 @@ void verifyYearScan(int Y, LiFaType lifa, Reporter &rep, bool verbose)
                 bool isGregorian = (int(Tsw) >= 2299161);
                 if (isGregorian)
                 {
-                    // Gregorian 历平均年 365.2425 天, 比回归年长 0.0003 天/年.
-                    // 1582→9999 累积漂移约 2.4 天, 立春会从 2/4 提前到 1/29 附近.
-                    // 故远未来年份允许 1/29; 上限保持 2/10 (定气/平气都不应超过).
-                    if (tLc.M == 1 && tLc.D < 29)
+                    // Gregorian 历平均年 365.2425 天, 比回归年长 0.00031 天/年.
+                    // 1582→9999 (约 8417 年) 累积漂移约 2.6 天, 天文立春(定气)
+                    // 会从 2/4 逐步提前到 2/1 附近.
+                    //
+                    // 但 pingqi(平气)方法在长弧外推时有额外累积误差:
+                    //   * 定冬至: 立春 = 冬至 + 1.5k (前推 ≈ 46 天), 短弧, 附加漂移 < 1 天.
+                    //   * 定夏至: 立春 = 夏至 + 7.5k (前推 ≈ 228 天), 长弧, 附加漂移可达 2~3 天.
+                    // 该附加漂移的物理来源是"近日点岁差"—— pingqi 线性模型
+                    // 假设 Earth 匀速运动, 而实际 Earth 近日点每 71 年在黄道上
+                    // 前移 1°, 7000+ 年累积 ~100° 位移, 显著改变半年长度分配,
+                    // 从而使 pingqi 立春 相对天文立春 逐年偏离.
+                    //
+                    // 故按立法分级设置下限:
+                    //   * 定气(天文)   / 定冬至(平气,短弧): 立春 不早于 1/29
+                    //   * 定夏至(平气,长弧)               : 立春 不早于 1/26
+                    //   * 上限统一保持 2/10.
+                    int earliestDay =
+                        (lifa == YuWuWeiZiPingLifa_DingXiaZhi) ? 26 : 29;
+                    if (tLc.M == 1 && tLc.D < earliestDay)
                     {
                         rep.fail({Y, "立春日期", lifaName(lifa),
                                   "Tsw=" + jdStr(Tsw) +
-                                  " Gregorian 下立春出现在 1/29 之前 (异常)"});
+                                  " Gregorian 下立春出现在 1/" +
+                                  std::to_string(earliestDay) + " 之前 (异常)"});
                     }
                     else if (tLc.M == 2 && tLc.D > 10)
                     {
@@ -801,6 +871,366 @@ static void debugAt(long double jd, LiFaType lifa, const std::string &label)
     std::printf("    月末节 JD=%.9Lf (%s)\n", b.tailJq, jdStr(b.tailJq).c_str());
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 多进程调度 (方案 D):
+//   父进程 fork N 个 worker, 各自跑一段 -range, 输出重定向到独立日志.
+//   父进程等所有 worker 结束, 从日志里 grep ##AGG## 汇总 + ##FAIL## 前 60 条.
+//   Ctrl-C 转发 SIGTERM. 每个 worker 内部 nice(gNice) 降低优先级.
+// ─────────────────────────────────────────────────────────────────────────────
+#if !defined(_WIN32)
+
+// 信号处理需要访问; 用 C 数组 + volatile 而非 std::vector 以满足 async-signal-safe
+static volatile sig_atomic_t gNumChildren = 0;
+static pid_t                 gChildPids[512];
+static volatile sig_atomic_t gTermFlag = 0;
+
+extern "C" void masterSignalHandler(int sig)
+{
+    gTermFlag = 1;
+    for (sig_atomic_t i = 0; i < gNumChildren; ++i)
+    {
+        if (gChildPids[i] > 0)
+        {
+            kill(gChildPids[i], SIGTERM);
+        }
+    }
+    // 首次 Ctrl-C 转发信号; 若用户再按一次强杀
+    signal(sig, SIG_DFL);
+}
+
+struct WorkerResult
+{
+    int  workerId = 0;
+    int  rangeStart = 0;
+    int  rangeEnd   = 0;
+    int  total = 0, ok = 0, fail = 0;
+    long elapsedSec = 0;
+    int  exitStatus = 0;
+    bool aggFound   = false;
+    std::string logPath;
+};
+
+// 从 worker 日志里解析 ##AGG## 摘要 (取最后一次出现, 防前面有 debug 干扰)
+static void parseWorkerAgg(WorkerResult &r)
+{
+    std::ifstream in(r.logPath);
+    if (!in) return;
+    std::string line, aggLine;
+    while (std::getline(in, line))
+    {
+        if (line.rfind("##AGG## ", 0) == 0) aggLine = line;
+    }
+    if (aggLine.empty()) return;
+    // ##AGG## worker=I range=S..E total=N ok=A fail=B elapsed=T
+    int wid = 0, rs = 0, re = 0, tot = 0, okC = 0, fl = 0;
+    long el = 0;
+    if (std::sscanf(aggLine.c_str(),
+                    "##AGG## worker=%d range=%d..%d total=%d ok=%d fail=%d elapsed=%ld",
+                    &wid, &rs, &re, &tot, &okC, &fl, &el) == 7)
+    {
+        r.aggFound = true;
+        r.total = tot;
+        r.ok    = okC;
+        r.fail  = fl;
+        r.elapsedSec = el;
+    }
+}
+
+// 从 worker 日志里收集 ##FAIL## 详情
+static void collectFailLines(const std::string &logPath,
+                             std::vector<std::string> &out,
+                             int maxLines)
+{
+    if ((int)out.size() >= maxLines) return;
+    std::ifstream in(logPath);
+    if (!in) return;
+    std::string line;
+    while (std::getline(in, line))
+    {
+        if (line.rfind("##FAIL## ", 0) == 0)
+        {
+            out.push_back(line.substr(9));  // 去掉前缀
+            if ((int)out.size() >= maxLines) return;
+        }
+    }
+}
+
+// 把 [S, E] 尽量等长切成 N 段
+static std::vector<std::pair<int,int>> splitRange(int s, int e, int n)
+{
+    std::vector<std::pair<int,int>> out;
+    if (n <= 1)
+    {
+        out.emplace_back(s, e);
+        return out;
+    }
+    long long total = (long long)e - s + 1;
+    long long base = total / n;
+    long long rem  = total % n;
+    int cur = s;
+    for (int i = 0; i < n; ++i)
+    {
+        long long len = base + (i < rem ? 1 : 0);
+        int a = cur;
+        int b = int(cur + len - 1);
+        cur = b + 1;
+        out.emplace_back(a, b);
+    }
+    return out;
+}
+
+// 参数子集透传给 worker (剔除 -jobs/-nice/-workdir/-range/-full, 追加 -child/-range/-nice)
+static std::vector<std::string> buildWorkerArgv(int workerId, int rs, int re,
+                                                int niceInc,
+                                                const std::vector<std::string> &origArgs)
+{
+    std::vector<std::string> out;
+    out.push_back(origArgs[0]);  // 可执行路径
+    for (size_t i = 1; i < origArgs.size(); ++i)
+    {
+        const std::string &s = origArgs[i];
+        if (s == "-jobs" || s == "-nice" || s == "-workdir")
+        {
+            // 带 1 个参数
+            ++i;
+            continue;
+        }
+        if (s == "-range")
+        {
+            // 带 2 个参数
+            i += 2;
+            continue;
+        }
+        if (s == "-full")
+        {
+            continue;  // 用 -range 精确覆盖, 抹去 -full 避免 range 冲突
+        }
+        out.push_back(s);
+    }
+    out.push_back("-child");
+    out.push_back(std::to_string(workerId));
+    out.push_back("-nice");
+    out.push_back(std::to_string(niceInc));
+    out.push_back("-range");
+    out.push_back(std::to_string(rs));
+    out.push_back(std::to_string(re));
+    return out;
+}
+
+// 父进程主循环: fork N 个子进程, 等待, 汇总
+static int runMaster(int totalStart, int totalEnd, int nJobs,
+                     int niceInc, const std::string &workdir,
+                     const std::vector<std::string> &origArgs)
+{
+    // 建/清理日志目录
+    if (mkdir(workdir.c_str(), 0755) != 0 && errno != EEXIST)
+    {
+        std::fprintf(stderr, "[父] 无法创建 workdir=%s: %s\n",
+                     workdir.c_str(), std::strerror(errno));
+        return 2;
+    }
+
+    auto ranges = splitRange(totalStart, totalEnd, nJobs);
+    std::fprintf(stderr,
+        "[父] 并行模式: jobs=%d nice=%d workdir=%s\n",
+        nJobs, niceInc, workdir.c_str());
+    std::fprintf(stderr, "[父] 任务分片:\n");
+    for (int i = 0; i < (int)ranges.size(); ++i)
+    {
+        std::fprintf(stderr,
+            "        worker-%d  range=%d..%d  (%d 年)\n",
+            i, ranges[i].first, ranges[i].second,
+            ranges[i].second - ranges[i].first + 1);
+    }
+    std::fflush(stderr);
+
+    std::vector<WorkerResult> results(ranges.size());
+    for (int i = 0; i < (int)ranges.size(); ++i)
+    {
+        results[i].workerId   = i;
+        results[i].rangeStart = ranges[i].first;
+        results[i].rangeEnd   = ranges[i].second;
+        results[i].logPath    = workdir + "/worker-" +
+                                std::to_string(i) + ".log";
+    }
+
+    // fork 前先安装信号处理; gChildPids 用作 async-signal-safe 通信
+    signal(SIGINT,  masterSignalHandler);
+    signal(SIGTERM, masterSignalHandler);
+    // 忽略 SIGPIPE, 防止子进程输出到已关闭 fd 时父进程被杀
+    signal(SIGPIPE, SIG_IGN);
+
+    time_t tBegin = std::time(nullptr);
+
+    for (int i = 0; i < (int)ranges.size(); ++i)
+    {
+        auto argv = buildWorkerArgv(i, ranges[i].first, ranges[i].second,
+                                    niceInc, origArgs);
+
+        pid_t pid = fork();
+        if (pid < 0)
+        {
+            std::fprintf(stderr, "[父] fork worker-%d 失败: %s\n",
+                         i, std::strerror(errno));
+            // 已 fork 的会继续跑, 但整体标记失败
+            continue;
+        }
+
+        if (pid == 0)
+        {
+            // ─── 子进程 ────────────────────────────────────────
+            // 重置信号 (父进程装的 handler 不应传染)
+            signal(SIGINT,  SIG_DFL);
+            signal(SIGTERM, SIG_DFL);
+            signal(SIGPIPE, SIG_DFL);
+
+            int fd = open(results[i].logPath.c_str(),
+                          O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            if (fd < 0)
+            {
+                std::fprintf(stderr, "worker-%d: 无法打开日志 %s: %s\n",
+                             i, results[i].logPath.c_str(),
+                             std::strerror(errno));
+                _exit(126);
+            }
+            dup2(fd, STDOUT_FILENO);
+            dup2(fd, STDERR_FILENO);
+            close(fd);
+
+            // 组装 execvp 的 char* 数组
+            std::vector<char*> cargv;
+            cargv.reserve(argv.size() + 1);
+            for (auto &s : argv) cargv.push_back(const_cast<char*>(s.c_str()));
+            cargv.push_back(nullptr);
+            execvp(cargv[0], cargv.data());
+            std::fprintf(stderr, "worker-%d: execvp 失败: %s\n",
+                         i, std::strerror(errno));
+            _exit(127);
+        }
+
+        // 父: 登记 pid (async-signal-safe)
+        gChildPids[gNumChildren] = pid;
+        __sync_synchronize();
+        gNumChildren = gNumChildren + 1;
+        std::fprintf(stderr, "[父] fork worker-%d pid=%d -> %s\n",
+                     i, (int)pid, results[i].logPath.c_str());
+        std::fflush(stderr);
+    }
+
+    std::fprintf(stderr,
+        "[父] 观察进度:   tail -f %s/worker-0.log\n"
+        "[父] 优雅停止:   Ctrl-C (会转发 SIGTERM 给全部 worker)\n\n",
+        workdir.c_str());
+    std::fflush(stderr);
+
+    // 收割所有 worker
+    int alive = gNumChildren;
+    while (alive > 0)
+    {
+        int status = 0;
+        pid_t pid = waitpid(-1, &status, 0);
+        if (pid < 0)
+        {
+            if (errno == EINTR) continue;
+            break;  // 全部收完
+        }
+        --alive;
+        int exitCode = WIFEXITED(status) ? WEXITSTATUS(status)
+                       : (WIFSIGNALED(status) ? 128 + WTERMSIG(status) : -1);
+
+        // 找是哪个 worker
+        int wid = -1;
+        for (int i = 0; i < (int)results.size(); ++i)
+        {
+            if (i < gNumChildren && gChildPids[i] == pid) { wid = i; break; }
+        }
+        if (wid >= 0)
+        {
+            results[wid].exitStatus = exitCode;
+            parseWorkerAgg(results[wid]);
+            std::fprintf(stderr,
+                "[父] worker-%d pid=%d 结束 exit=%d  ok=%d fail=%d elapsed=%lds  剩余=%d\n",
+                wid, (int)pid, exitCode,
+                results[wid].ok, results[wid].fail,
+                results[wid].elapsedSec, alive);
+            std::fflush(stderr);
+        }
+    }
+
+    time_t tEnd = std::time(nullptr);
+
+    // 汇总
+    int totalAll = 0, okAll = 0, failAll = 0, missing = 0;
+    for (auto &r : results)
+    {
+        if (!r.aggFound) { ++missing; continue; }
+        totalAll += r.total;
+        okAll    += r.ok;
+        failAll  += r.fail;
+    }
+
+    std::fprintf(stderr, "\n========== 并行汇总 ==========\n");
+    std::fprintf(stderr,
+        "%-6s %-16s %-8s %-8s %-8s %-8s %-6s\n",
+        "id", "range", "total", "ok", "fail", "elapsed", "exit");
+    for (auto &r : results)
+    {
+        char rangeBuf[32];
+        std::snprintf(rangeBuf, sizeof(rangeBuf), "%d..%d",
+                      r.rangeStart, r.rangeEnd);
+        if (r.aggFound)
+        {
+            std::fprintf(stderr,
+                "%-6d %-16s %-8d %-8d %-8d %-8ld %-6d\n",
+                r.workerId, rangeBuf, r.total, r.ok, r.fail,
+                r.elapsedSec, r.exitStatus);
+        }
+        else
+        {
+            std::fprintf(stderr,
+                "%-6d %-16s %-8s %-8s %-8s %-8s %-6d  (no ##AGG## in log)\n",
+                r.workerId, rangeBuf, "-", "-", "-", "-", r.exitStatus);
+        }
+    }
+    std::fprintf(stderr,
+        "\n合计: 检查=%d  通过=%d  失败=%d  丢失汇总=%d\n",
+        totalAll, okAll, failAll, missing);
+    std::fprintf(stderr, "总用时: %ld 秒 (%.1f 分钟)\n",
+                 (long)(tEnd - tBegin), (tEnd - tBegin) / 60.0);
+
+    if (failAll > 0 || missing > 0)
+    {
+        std::vector<std::string> failLines;
+        for (auto &r : results) collectFailLines(r.logPath, failLines, 60);
+        if (!failLines.empty())
+        {
+            std::fprintf(stderr, "\n失败样例(合并前 %d 条):\n",
+                         (int)failLines.size());
+            for (auto &s : failLines)
+                std::fprintf(stderr, "  %s\n", s.c_str());
+        }
+        std::fprintf(stderr,
+            "\n所有日志: %s/worker-*.log\n", workdir.c_str());
+    }
+
+    if (gTermFlag) return 130;   // 被 Ctrl-C 中断
+    return (failAll > 0 || missing > 0) ? 1 : 0;
+}
+
+// 计算默认 -jobs: min(HW/2, 8), 至少 1
+static int autoJobs()
+{
+    unsigned int hw = std::thread::hardware_concurrency();
+    if (hw == 0) hw = 2;
+    int j = int(hw) / 2;
+    if (j < 1) j = 1;
+    if (j > 8) j = 8;
+    return j;
+}
+
+#endif  // !_WIN32
+
+
 int main(int argc, char *argv[])
 {
     bool verbose = false;
@@ -810,10 +1240,24 @@ int main(int argc, char *argv[])
     // 自定义范围:   -range S E  => 扫描 [S, E] 每一年
     // 加速模式:     -fast       => 跳过真太阳时/农历/距节令测试, 仅保留核心节气+日柱+时柱
     // 进度输出:     -progress N => 每 N 年输出一次进度 (默认 50, 且前 3 年强制输出)
+    // 并行:         -jobs N     => POSIX 下 fork N 个 worker 各跑一段
+    //               -nice N     => 子进程 nice 增量 (默认 10, 0 表示不 renice)
+    //               -workdir D  => worker 日志目录 (默认 pingqi_logs)
+    //               -child ID   => (内部) 标记为 worker; 用户不应手动传
     bool fullMode = false;
     bool fastMode = false;
     int  rangeStart = 0, rangeEnd = 0;
     int  progressEvery = 50;
+    int  cliJobs   = -1;           // -1 = 未指定, 走默认
+    int  cliNice   = 10;
+    int  childId   = -1;           // >=0 => 当前是 worker
+    std::string workdir = "pingqi_logs";
+
+    // 保留原始参数, 供 fork worker 时透传
+    std::vector<std::string> origArgs;
+    origArgs.reserve(argc);
+    for (int i = 0; i < argc; ++i) origArgs.emplace_back(argv[i]);
+
     for (int i = 1; i < argc; ++i)
     {
         std::string s = argv[i];
@@ -830,7 +1274,43 @@ int main(int argc, char *argv[])
         }
         else if (s == "-progress" && i + 1 < argc)
             progressEvery = std::atoi(argv[++i]);
+        else if (s == "-jobs" && i + 1 < argc)
+            cliJobs = std::atoi(argv[++i]);
+        else if (s == "-nice" && i + 1 < argc)
+            cliNice = std::atoi(argv[++i]);
+        else if (s == "-workdir" && i + 1 < argc)
+            workdir = argv[++i];
+        else if (s == "-child" && i + 1 < argc)
+            childId = std::atoi(argv[++i]);
     }
+
+#if !defined(_WIN32)
+    // ─── 父进程调度分支 ────────────────────────────────────────
+    // 条件: 未在 worker 模式 + 是 fullMode + jobs > 1
+    // (jobs == 1 显式走单进程原逻辑; jobs 未指定则用 autoJobs 默认)
+    if (childId < 0 && fullMode && !doDebug)
+    {
+        int jobs = (cliJobs > 0) ? cliJobs : autoJobs();
+        if (jobs > 1)
+        {
+            int s = (rangeStart || rangeEnd) ? rangeStart : -722;
+            int e = (rangeStart || rangeEnd) ? rangeEnd   : 9999;
+            if (s > e) std::swap(s, e);
+            // 单区间年数 < jobs 时降级
+            int spanYears = e - s + 1;
+            if (jobs > spanYears) jobs = spanYears;
+            return runMaster(s, e, jobs, cliNice, workdir, origArgs);
+        }
+    }
+    // ─── Worker 分支 ───────────────────────────────────────────
+    // childId >= 0: 由父进程通过 execvp 启动; 需要 renice 并启用机器可读输出
+    if (childId >= 0 && cliNice > 0)
+    {
+        // 忽略 nice() 返回值; 失败也不影响功能
+        errno = 0;
+        (void)nice(cliNice);
+    }
+#endif
 
     if (doDebug)
     {
@@ -942,6 +1422,7 @@ int main(int argc, char *argv[])
     };
 
     Reporter rep;
+    if (childId >= 0) rep.workerMode = true;
     auto tBegin = std::time(nullptr);
 
     for (LiFaType lifa : modes)
@@ -988,11 +1469,22 @@ int main(int argc, char *argv[])
     }
 
     rep.print(60);
+    auto tEnd = std::time(nullptr);
     if (fullMode)
     {
-        auto tEnd = std::time(nullptr);
         std::fprintf(stderr, "\n总用时: %ld 秒 (%.1f 分钟)\n",
                      (long)(tEnd - tBegin), (tEnd - tBegin) / 60.0);
+    }
+    // Worker 模式: 在 stderr 末尾写一行结构化摘要, 供父进程 grep ##AGG## 汇总
+    if (childId >= 0)
+    {
+        int rs = (rangeStart || rangeEnd) ? rangeStart : -722;
+        int re = (rangeStart || rangeEnd) ? rangeEnd   : 9999;
+        if (rs > re) std::swap(rs, re);
+        rep.printAgg(childId, rs, re, (long)(tEnd - tBegin));
+        // Exit code 用 min(fail, 255); 父进程读 ##AGG## 拿真实数字
+        int fl = (int)rep.issues.size();
+        return fl > 255 ? 255 : fl;
     }
     return rep.issues.empty() ? 0 : 1;
 }

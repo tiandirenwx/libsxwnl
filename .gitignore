@@ -375,3 +375,27 @@ test/pingqi_dingqi/pingqi_dingqi_test
 !test/pingqi_dingqi/*.cpp
 !test/pingqi_dingqi/*.h
 !test/pingqi_dingqi/CMakeLists.txt
+
+.workbuddy/
+
+# ----- test/eph_hp/ 高精度天体位置"备件" -----
+# 只入库脚本 / 源码 / CMake / README, 全部数据和生成文件都通过
+# test/eph_hp/fetch_data.sh 从 IMCCE / IERS / NASA 官方源下载并生成.
+#
+# 原始数据 (通过 fetch_data.sh small / vsop2013 / de440 / de441 下载)
+test/eph_hp/data/*
+# 但 data/ 目录本身要保留(fetch 时才能写入). 用一个 .gitkeep 保留目录.
+!test/eph_hp/data/.gitkeep
+#
+# 自动生成的 C++ header (由 tools/*.py 通过 fetch_data.sh gen 生成)
+test/eph_hp/vsop87d_earth_hp.h
+test/eph_hp/iau2000a_nut_lon_hp.h
+#
+# 自动生成的 CSV 参考 (由 tools/vsop2013_eval.py 通过 fetch_data.sh gen 生成)
+test/eph_hp/vsop2013_emb_reference.csv
+#
+# 压缩中间产物 (不同用户可能测试不同压缩算法)
+test/eph_hp/**/*.gz
+test/eph_hp/**/*.xz
+test/eph_hp/**/*.zst
+

@@ -1,0 +1,3 @@
+# 此文件仅用于占位, 保证 data/ 目录随仓库分发, 让 fetch_data.sh 可以直接写入.
+# 全部真实数据 (VSOP87D.ear / IAU2000A_tab5.3a.txt / VSOP2013*.dat / de*.bsp 等)
+# 都不入库, 通过运行 test/eph_hp/fetch_data.sh 从上游按需下载.
