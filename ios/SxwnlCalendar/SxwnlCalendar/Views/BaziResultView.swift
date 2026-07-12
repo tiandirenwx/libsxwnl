@@ -331,8 +331,9 @@ struct BaziResultView: View {
         var s = ""
         let dq = strip(arg.result.dingQiType)
         if !dq.isEmpty { s += "依据\(dq)。" }
-        let jq = strip(arg.result.jieQi).replacingOccurrences(
-            of: "\n+", with: "；", options: .regularExpression)
+        let jq = arg.result.jieQi
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\n+", with: "；", options: .regularExpression)
         if !jq.isEmpty { s += "\(jq)。" }
         if !arg.result.siLing.isEmpty {
             s += "命主月令司令：\(arg.result.siLing)"

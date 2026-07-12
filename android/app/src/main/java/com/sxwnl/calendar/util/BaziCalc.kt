@@ -114,6 +114,15 @@ object BaziCalc {
 
     fun pad2(n: Int): String = if (n < 10) "0$n" else "$n"
 
+    /**
+     * 农历日名(初一../三十). 统一走底层 C++(复用 sx_lang_zh.h 的 Rmc[] 表),
+     * 不在各平台重复维护字符串表; native 异常时回退 "${d}日".
+     */
+    fun lunarDayName(d: Int): String {
+        val s = com.sxwnl.calendar.bridge.SxwnlNative.getLunarDayName(d)
+        return s.ifEmpty { "${d}日" }
+    }
+
     /** 出生时间一条记录文本 */
     fun formatRecord(p: BaziParams, lunarMonths: List<LunarMonth>): String {
         val ymd = "${formatYear(p.year)}${pad2(p.month)}月${pad2(p.day)}日"
@@ -122,7 +131,7 @@ object BaziCalc {
             val mName = lunarMonths.firstOrNull {
                 it.month == p.month && it.isLeap == p.isLeap
             }?.name ?: "${p.month}月"
-            return "农历 ${formatYear(p.year)}${mName}${p.day}日 $hm"
+            return "农历 ${formatYear(p.year)}${mName}${lunarDayName(p.day)} $hm"
         }
         return "公历 $ymd $hm"
     }

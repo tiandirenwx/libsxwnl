@@ -510,7 +510,11 @@ void BaziBase::calcPingQiPaiPan()
     // #2000年1月7日作为起点
     jd += 13 / 24.0 - J2000; // 转为前一日23点起算(原jd为本日中午12点起算)
     auto D = int2(jd);
-    auto SC = int2((jd - D) * 12); // 日数与时辰
+    // 加微小 epsilon 抵消浮点误差: 时辰边界(整点)处 (jd-D)*12 可能因浮点下溢
+    // 略小于整数(如 3.99999999627), 导致 floor 后归入前一个时辰(戊辰误判为丁卯)。
+    // jd 量级约 2.4e6, long double 量化使此处误差可达 ~3e-9; 取 1e-7 既覆盖该误差,
+    // 又远小于 1 秒(SC 空间约 1.39e-4), 不会误伤真实非边界时间。
+    auto SC = int2((jd - D) * 12 + 1e-7); // 日数与时辰
     auto riZhu = D - 6 + 9000000;
     auto shiZhu = (D - 1) * 12 + 90000000 + SC;
 
@@ -577,7 +581,12 @@ void BaziBase::calcDingQiPaiPan()
 
     // 子时转日
     jd += 13.0 / 24 - J2000 ;                            // 转为前一日23点起算(原jd为本日中午12点起算)
-    int D = int2(jd), SC = int2((jd - D) * 12); // 日数与时辰
+    int D = int2(jd);
+    // 加微小 epsilon 抵消浮点误差: 时辰边界(整点)处 (jd-D)*12 可能因浮点下溢
+    // 略小于整数(如 3.99999999627), 导致 floor 后归入前一个时辰(戊辰误判为丁卯)。
+    // jd 量级约 2.4e6, long double 量化使此处误差可达 ~3e-9; 取 1e-7 既覆盖该误差,
+    // 又远小于 1 秒(SC 空间约 1.39e-4), 不会误伤真实非边界时间。
+    int SC = int2((jd - D) * 12 + 1e-7); // 日数与时辰
     // 日
     v = D - 6 + 9000000;
     arraySiZhu_[4] = v % 10;
@@ -733,6 +742,33 @@ std::string BaziBase::getLifa() const
         return "『定气方式』 依据尤氏子平历定夏至计算节气交接日期";
     }
     return "『定气方式』 未知";
+}
+
+std::string BaziBase::getDingQiType() const
+{
+    // 返回不含标签/"依据"前缀的定气方式简洁标签, 供简洁版"依据XXX。"文案直接拼接。
+    if (mLifa_ > LifaUnknown && mLifa_ < XianDaiNongLifa_DingQiFa)
+    {
+        return std::string(LifaList[mLifa_ - 1]) + "数据拟合";
+    }
+    if (XianDaiNongLifa_DingQiFa == mLifa_)
+    {
+        return "现代农历定气法";
+    }
+    if (YuWuWeiZiPingLifa_DingDongZhi == mLifa_)
+    {
+        return "尤氏子平历定冬至";
+    }
+    if (YuWuWeiZiPingLifa_DingXiaZhi == mLifa_)
+    {
+        return "尤氏子平历定夏至";
+    }
+    return "未知定气方式";
+}
+
+std::string BaziBase::getJieQiTerms() const
+{
+    return getJieQiIterms();
 }
 
 std::string BaziBase::getAst() const

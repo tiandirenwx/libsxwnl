@@ -9,6 +9,7 @@ napi_value NapiGetJieQiList(napi_env env, napi_callback_info info);
 napi_value NapiGetYearLeapMonth(napi_env env, napi_callback_info info);
 napi_value NapiGetLunarMonths(napi_env env, napi_callback_info info);
 napi_value NapiGetLunarMonthDays(napi_env env, napi_callback_info info);
+napi_value NapiGetLunarDayName(napi_env env, napi_callback_info info);
 napi_value NapiGetSolarMonthValidDays(napi_env env, napi_callback_info info);
 napi_value NapiGetYearCalendar(napi_env env, napi_callback_info info);
 napi_value NapiCalcDayRTS(napi_env env, napi_callback_info info);

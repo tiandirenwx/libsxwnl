@@ -85,10 +85,13 @@ export struct DateTimePicker {
     }
   }
 
-  // 日轮选项文本
+  // 日轮选项文本 — 农历模式显示"初一/廿九"式名称, 公历显示"1日"
   dayNames(): string[] {
     const r: string[] = []
-    for (let i = 0; i < this.validDays.length; i++) r.push(`${this.validDays[i]}日`)
+    for (let i = 0; i < this.validDays.length; i++) {
+      const d: number = this.validDays[i]
+      r.push(this.inputMode === MODE_LUNAR ? BaziCalc.lunarDayName(d) : `${d}日`)
+    }
     return r
   }
 

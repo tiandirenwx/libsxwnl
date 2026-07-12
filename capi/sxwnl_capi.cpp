@@ -56,10 +56,24 @@ static std::string gz_str(GZ gz) {
     return std::string(Gan[gz.tg]) + Zhi[gz.dz];
 }
 
-static std::string lunar_month_str(int month, bool isLeap) {
+// 生成阴历月名:
+//   古历年终置闰月(仅 isLeap 的那个月): 春秋/战国"十三月"(y∈[-721,-220)),
+//   秦汉"后九月"(y∈[-220,-104]) —— 一年至多一个, 不能对全年套用
+//   重月(isSpec, 非闰): 用 SYmc[](壹/贰/…) 与正常同名月区分
+//   其余普通月/普通闰月: "闰"+Ymc[]
+// month 为月号 (1-12, 与 Day::getLunarMonth() 一致)
+static std::string lunar_month_str(int year, int month, bool isLeap, bool isSpec) {
+    if (isLeap) {
+        if (year >= -721 && year < -220) return std::string(BDLeapYueName[0]) + "月";
+        if (year >= -220 && year <= -104) return std::string(BDLeapYueName[1]) + "月";
+    }
     std::string prefix = isLeap ? "闰" : "";
-    if (month >= 1 && month <= 12) return prefix + Ymc[month - 1] + "月";
-    return prefix + std::to_string(month) + "月";
+    std::string base;
+    if (month >= 1 && month <= 12)
+        base = isSpec ? SYmc[month - 1] : Ymc[month - 1];
+    else
+        base = std::to_string(month);
+    return prefix + base + "月";
 }
 
 static std::string lunar_day_str(int day) {
@@ -94,7 +108,8 @@ static void fill_day_info(Day *d, SxwnlDayInfo *out) {
     safe_copy(out->month_gz, sizeof(out->month_gz), gz_str(mGZ));
     safe_copy(out->day_gz,   sizeof(out->day_gz),   gz_str(dGZ));
     safe_copy(out->lunar_month_name, sizeof(out->lunar_month_name),
-              lunar_month_str(out->lunar_month, out->is_leap_month));
+              lunar_month_str(out->lunar_year, out->lunar_month,
+                              out->is_leap_month, d->isSpecNextMonth()));
     safe_copy(out->lunar_day_name, sizeof(out->lunar_day_name),
               lunar_day_str(out->lunar_day));
     safe_copy(out->sheng_xiao, sizeof(out->sheng_xiao), ShengXiao[yGZ.dz]);
@@ -180,14 +195,15 @@ struct SxwnlBaziHandle {
         shengXiao  = bazi->getShenXiao();
         age        = bazi->getAge();
         lifa       = bazi->getLifa();
+        dingQiType = bazi->getDingQiType();  // 定气方式(历法), 用于简洁版"依据..."文案
         ast        = bazi->getAst();
-        jieQi      = bazi->getJieLing();
+        jieQi      = bazi->getJieQiTerms();   // 仅节气交接, 不含经纬度/真太阳时块
         qiYun      = bazi->getQiYun();
         jiaoYun    = bazi->getJiaoYun();
-        auto [lb, dob, dqt] = bazi->getLunarInfo();
-        lunarBirth  = lb;
-        dateOfBirth = dob;
-        dingQiType  = dqt;
+        // getLunarInfo() 返回 (年号, 生肖, 农历生日)
+        auto lunarInfo = bazi->getLunarInfo();
+        dateOfBirth = std::get<0>(lunarInfo);  // 出生年代(年号)
+        lunarBirth  = std::get<2>(lunarInfo);  // 农历生日
     }
 };
 
@@ -467,6 +483,15 @@ int sxwnl_get_lunar_month_days(int year, int month, bool is_leap, bool is_spec) 
     return guard([&] { return (int)sxtwl::getLunarMonthNum(year, (uint8_t)month, is_leap, is_spec); }, 0);
 }
 
+int sxwnl_get_lunar_day_name(int day, char *out, int cap) {
+    return guard([&]() -> int {
+        if (!out || cap <= 0) return 0;
+        std::string name = lunar_day_str(day);   // 复用 Rmc[] 表, 越界回退数字
+        safe_copy(out, (size_t)cap, name);
+        return (int)std::strlen(out);
+    }, 0);
+}
+
 int sxwnl_get_solar_month_valid_days(int year, int month, int *out, int max_count) {
     return guard([&]() -> int {
         if (!out || max_count <= 0 || month < 1 || month > 12) return 0;
@@ -500,6 +525,7 @@ static void enum_lunar_window(int year, std::vector<SxwnlLunarMonth> &v) {
         bool isLeap = (leap && i == leap);
         bool bd = false;
         std::string t1, name;
+        // 古历年终置闰月(仅这个闰月)按年份取"十三月/后九月", 一年至多一个
         if (isLeap) {
             if (year >= -721 && year < -220) { t1 = BDLeapYueName[0]; bd = true; }
             else if (year >= -220 && year <= -104) { t1 = BDLeapYueName[1]; bd = true; }
@@ -509,6 +535,7 @@ static void enum_lunar_window(int year, std::vector<SxwnlLunarMonth> &v) {
         if (bd) {
             name = t1 + "月";   // 后九月 / 十三月
         } else {
+            // 重月(isSpec)用 SYmc[] 与正常同名月区分
             std::string t2 = (yn >= 1 && yn <= 12)
                 ? (vecSpec[i] ? SYmc[yn - 1] : Ymc[yn - 1])
                 : std::to_string(yn);
@@ -621,12 +648,23 @@ int sxwnl_get_year_calendar(int year, SxwnlYearCalMonth *out, int max_count) {
             int ymi = ((mc % 12) + 10) % 12;
             bool isLeap = (leap && i == leap);
             bool isSpec = (i < (int)Spc.size()) ? Spc[i] : false;
-            std::string monthName = isLeap ? "闰" : "";
-            if (ymi >= 0 && ymi < 12) {
-                monthName += isSpec ? SYmc[ymi] : Ymc[ymi];
+            bool bd = false;
+            std::string monthName;
+            if (isLeap) {
+                if (year >= -721 && year < -220) {
+                    monthName = std::string(BDLeapYueName[0]) + "月";
+                    bd = true;
+                } else if (year >= -220 && year <= -104) {
+                    monthName = std::string(BDLeapYueName[1]) + "月";
+                    bd = true;
+                }
             }
-            if (monthName.size() < 3 || (isLeap && monthName.size() < 6))
-                monthName += "月";
+            if (!bd) {
+                std::string t2 = (ymi >= 0 && ymi < 12)
+                    ? (isSpec ? SYmc[ymi] : Ymc[ymi])
+                    : std::to_string(ymi);
+                monthName = (isLeap ? "闰" : "") + t2 + "月";
+            }
 
             m.month_idx = ymi;
             m.is_leap   = isLeap ? 1 : 0;

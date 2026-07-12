@@ -46,6 +46,8 @@ object SxwnlNative {
     @JvmStatic external fun getLunarMonthDays(
         year: Int, month: Int, isLeap: Boolean, isSpec: Boolean
     ): Int
+    /** 农历日名(初一../三十) — 底层复用 Rmc[] 表统一取名 */
+    @JvmStatic external fun getLunarDayName(day: Int): String
     @JvmStatic external fun getSolarMonthValidDays(year: Int, month: Int): IntArray?
 
     // ═══ Year Calendar ═══════════════════════════════════════

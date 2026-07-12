@@ -92,6 +92,8 @@ public:
     void calcBaziPaiPan();
     
     std::string getLifa() const;
+    std::string getDingQiType() const; // 定气方式(历法)简洁标签, 供排盘简洁版"依据..."文案使用
+    std::string getJieQiTerms() const; // 出生月首/末节交接(不含经纬度/真太阳时块)
     std::string getAst() const;
     std::string getUserName() const;
     std::string getUserGender() const;

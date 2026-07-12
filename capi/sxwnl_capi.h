@@ -107,6 +107,11 @@ int  sxwnl_get_lunar_months(int year, SxwnlLunarMonth *out, int max_count);
 // 某农历月的天数(29 或 30)
 int  sxwnl_get_lunar_month_days(int year, int month, bool is_leap, bool is_spec);
 
+// 农历日名(初一/初二../三十). day 为 1..30; 越界写入数字串兜底。
+// 写入 out(以 '\0' 结尾), 返回写入的字节数(不含结尾符); 失败返回 0。
+// 底层复用 Rmc[] 表, 供各端(月历/八字选择器)统一取名, 避免各平台重复硬编码。
+int  sxwnl_get_lunar_day_name(int day, char *out, int cap);
+
 // 某公历年月中"真实存在"的日号列表(写入 out, 升序), 返回天数。
 // 依据本库历法(儒略<->格里), 自动跳过 1582-10-05..14 改历缺失的 10 天,
 // 并自然给出各月正确长度(平/闰年二月、30/31 天等)。out 建议容量 >= 31。

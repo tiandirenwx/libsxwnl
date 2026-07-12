@@ -803,7 +803,7 @@ export struct CalendarPage {
       // 3) 干支年 / 农历月 / 农历日
       this.popupInfoLine(
         `${day.yearGZ}年`,
-        `${day.isLeapMonth ? '闰' : ''}${day.lunarMonthName}`,
+        day.lunarMonthName,
         `${day.lunarDayName}日`,
         '#FFFFFF', false
       )

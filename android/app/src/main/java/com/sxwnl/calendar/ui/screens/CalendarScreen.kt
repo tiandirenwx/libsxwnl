@@ -65,10 +65,11 @@ private val DEFAULT_LOCATION = GeoCity("北京市", "天安门", 116.3833, 39.9,
 @Composable
 fun CalendarScreen() {
     val scope = rememberCoroutineScope()
-    val now = remember { Calendar.getInstance() }
-    val todayY = now.get(Calendar.YEAR)
-    val todayM = now.get(Calendar.MONTH) + 1
-    val todayD = now.get(Calendar.DAY_OF_MONTH)
+
+    // ── "今天" 用可变状态: app 回到前台时刷新 (跨天/退出再进来回到今天) ──
+    var todayY by remember { mutableIntStateOf(Calendar.getInstance().get(Calendar.YEAR)) }
+    var todayM by remember { mutableIntStateOf(Calendar.getInstance().get(Calendar.MONTH) + 1) }
+    var todayD by remember { mutableIntStateOf(Calendar.getInstance().get(Calendar.DAY_OF_MONTH)) }
 
     var year by remember { mutableIntStateOf(todayY) }
     var month by remember { mutableIntStateOf(todayM) }
@@ -77,6 +78,10 @@ fun CalendarScreen() {
     var days by remember { mutableStateOf(emptyList<DayInfo>()) }
     var selectedDay by remember { mutableStateOf<DayInfo?>(null) }
     var showSheet by remember { mutableStateOf(false) }
+
+    // 老黄历底部抽屉 (ModalBottomSheet) — 对齐鸿蒙 bindSheet
+    var showAlmanacSheet by remember { mutableStateOf(false) }
+    var almanacSheetDay by remember { mutableStateOf<DayInfo?>(null) }
 
     var rtsDay by remember { mutableIntStateOf(todayD) }
     var rts by remember { mutableStateOf<DayRTS?>(null) }
@@ -126,6 +131,15 @@ fun CalendarScreen() {
         jieQiEvents = jq
     }
 
+    fun resetToToday() {
+        // 用全新 Calendar 读取, 避免 app 常驻跨天后"今天"陈旧
+        val n = Calendar.getInstance()
+        todayY = n.get(Calendar.YEAR)
+        todayM = n.get(Calendar.MONTH) + 1
+        todayD = n.get(Calendar.DAY_OF_MONTH)
+        year = todayY; month = todayM; rtsDay = todayD
+    }
+
     fun navigate(dy: Int, dm: Int) {
         var y = year + dy
         var m = month + dm
@@ -136,9 +150,7 @@ fun CalendarScreen() {
         // 避免与 LaunchedEffect 并行触发双重 IO 调用.
     }
 
-    fun goToday() {
-        year = todayY; month = todayM; rtsDay = todayD
-    }
+    fun goToday() = resetToToday()
 
     fun applyInput() {
         val y = YearUtil.yearStrToAstro(yearInput)
@@ -233,6 +245,20 @@ fun CalendarScreen() {
             location.longitude, location.latitude, location.timezone)
     }
 
+    // ── app 回到前台 → 回到今天 (与鸿蒙"退出再进来回到今天"对齐) ──
+    //   ON_RESUME 在首次启动也会触发 (此时已是今天, resetToToday 为空操作);
+    //   切 Tab 不会触发 (Activity 生命周期不变), 不影响 Tab 间浏览状态.
+    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                resetToToday()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     Column(Modifier.fillMaxSize().background(Background)) {
         HeaderSection(year, month, days.firstOrNull())
         NavSection(
@@ -297,7 +323,7 @@ fun CalendarScreen() {
             },
             modifier = Modifier.weight(1f)
         )
-        BottomInfoBar(year, month, rtsDay, rts, moonEvents, jieQiEvents, location)
+        BottomInfoBar(month, rtsDay, rts, moonEvents, jieQiEvents, localClock)
     }
 
     if (showSheet && selectedDay != null) {
@@ -312,10 +338,26 @@ fun CalendarScreen() {
                 val resetDay = if (year == todayY && month == todayM) todayD else 1
                 if (resetDay != rtsDay) rtsDay = resetDay
             },
-            onOpenTopics = {
-                // 切换到"董公择日 · 经典知识": 关闭日详情, 打开静态知识 Dialog.
-                //   切换 (而非叠加) 与鸿蒙端 sheetMode='topics' 语义一致.
+            onOpenAlmanacSheet = {
+                // 切换到"老黄历底部抽屉": 关闭日详情弹窗, 打开 ModalBottomSheet.
+                //   与鸿蒙 openAlmanacSheet -> bindSheet 语义一致 (点空白/下拉即退出).
                 showSheet = false
+                almanacSheetDay = selectedDay
+                showAlmanacSheet = true
+            }
+        )
+    }
+
+    // 老黄历底部抽屉 (ModalBottomSheet) — 点空白或下拉即关闭, 不再需要后退键
+    if (showAlmanacSheet && almanacSheetDay != null) {
+        AlmanacSheetBottomSheet(
+            day = almanacSheetDay!!,
+            onDismiss = {
+                showAlmanacSheet = false
+                almanacSheetDay = null
+            },
+            onOpenTopics = {
+                showAlmanacSheet = false
                 showTopics = true
             }
         )
@@ -833,128 +875,106 @@ private fun shortName(s: String): String {
 }
 
 // ─── Bottom info bar ────────────────────────────────────────────────────
+//
+//  与鸿蒙 CalendarPage.bottomInfoBar / sunMoonCompact 对齐: 紧凑布局, 不占用
+//  过多高度, 保证月历主体完整可见无需拖动.
+//
+//  · 标题行: "{月}月{日}日 · 日月升降"  +  本地系统时钟
+//  · 一行 6 列: ☀↑ / ☀ / ☀↓ / ☾↑ / ☾ / ☾↓
+//  · 一行 4 列: 晨 / 日 / 昏 / 白
+//  · 月相 / 节气 — 流式排列 (一行排不下自动折行)
+// ────────────────────────────────────────────────────────────────────────
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun BottomInfoBar(
-    year: Int, month: Int, rtsDay: Int, rts: DayRTS?,
+    month: Int, rtsDay: Int, rts: DayRTS?,
     moonEvents: List<MonthEvent>, jieQiEvents: List<MonthEvent>,
-    location: GeoCity
+    localClock: String
 ) {
     Column(
         Modifier
             .fillMaxWidth()
             .background(Surface)
-            .padding(Dimens.paddingMd)
+            .border(0.5.dp, DividerColor)
+            .padding(horizontal = Dimens.paddingSm, vertical = 6.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("${YearUtil.astroYearToStr(year)}年${month}月${rtsDay}日 · 日月升降",
-                fontSize = Dimens.fontCaption, fontWeight = FontWeight.Medium,
+        // 标题行
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("${month}月${rtsDay}日 · 日月升降",
+                fontSize = Dimens.fontSmall, fontWeight = FontWeight.Medium,
                 color = Primary)
             Spacer(Modifier.weight(1f))
-            val locLabel = if (location.district.isNotEmpty() &&
-                            location.district != location.province)
-                "${location.province}·${location.district}" else location.district
-            Text("$locLabel (${fmtLonLat(location.longitude, location.latitude)})",
-                fontSize = Dimens.fontSmall, color = TextSecondary)
+            Text(localClock, fontSize = Dimens.fontSmall, color = TextSecondary)
         }
-        Spacer(Modifier.height(6.dp))
-        RTSRow3(
-            "日出", rts?.sunRise ?: "--:--:--",
-            "日落", rts?.sunSet ?: "--:--:--",
-            "中天", rts?.sunMeridian ?: "--:--:--"
-        )
-        RTSRow3(
-            "月出", rts?.moonRise ?: "--:--:--",
-            "月落", rts?.moonSet ?: "--:--:--",
-            "月中", rts?.moonMeridian ?: "--:--:--"
-        )
-        RTSRow2(
-            "晨起天亮", rts?.civilDawn ?: "--:--:--",
-            "晚上天黑", rts?.civilDusk ?: "--:--:--"
-        )
-        RTSRow2(
-            "日照时间", rts?.dayLength ?: "--:--:--",
-            "白天时间", rts?.lightLength ?: "--:--:--"
-        )
+        Spacer(Modifier.height(2.dp))
 
-        if (moonEvents.isNotEmpty() || jieQiEvents.isNotEmpty()) {
-            Spacer(Modifier.height(8.dp))
-            HorizontalDivider(color = DividerColor)
-            Spacer(Modifier.height(6.dp))
-            Text("${month}月月相与节气",
-                fontSize = Dimens.fontSmall, color = TextSecondary)
-            Spacer(Modifier.height(4.dp))
-            EventGrid(moonEvents, PrimaryLight)
-            if (jieQiEvents.isNotEmpty()) {
-                EventGrid(jieQiEvents, JieQiColor)
-            }
+        // 一行 6 列: 太阳出/中/落 + 月亮出/中/落
+        Row(Modifier.fillMaxWidth()) {
+            TinyCell("☀↑", rts?.sunRise     ?: "--:--:--", Modifier.weight(1f))
+            TinyCell("☀",  rts?.sunMeridian ?: "--:--:--", Modifier.weight(1f))
+            TinyCell("☀↓", rts?.sunSet      ?: "--:--:--", Modifier.weight(1f))
+            TinyCell("☾↑", rts?.moonRise    ?: "--:--:--", Modifier.weight(1f))
+            TinyCell("☾",  rts?.moonMeridian?: "--:--:--", Modifier.weight(1f))
+            TinyCell("☾↓", rts?.moonSet     ?: "--:--:--", Modifier.weight(1f))
+        }
+        Spacer(Modifier.height(2.dp))
+
+        // 一行 4 列: 晨/日/昏/白
+        Row(Modifier.fillMaxWidth()) {
+            TinyCell("晨", rts?.civilDawn   ?: "--:--:--", Modifier.weight(1f))
+            TinyCell("日", rts?.dayLength   ?: "--:--:--", Modifier.weight(1f))
+            TinyCell("昏", rts?.civilDusk   ?: "--:--:--", Modifier.weight(1f))
+            TinyCell("白", rts?.lightLength ?: "--:--:--", Modifier.weight(1f))
+        }
+
+        // 月相 / 节气 — 流式
+        if (moonEvents.isNotEmpty()) {
+            EventFlowLine("月相", moonEvents, month, PrimaryLight)
+        }
+        if (jieQiEvents.isNotEmpty()) {
+            EventFlowLine("节气", jieQiEvents, month, JieQiColor)
         }
     }
 }
 
+/** 6/4 列等宽紧凑单元 (label + value), 居中排布 */
 @Composable
-private fun RTSRow3(l1: String, v1: String, l2: String, v2: String,
-                    l3: String, v3: String) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-        RTSLabeled(l1, v1, Modifier.weight(1f))
-        RTSLabeled(l2, v2, Modifier.weight(1f))
-        RTSLabeled(l3, v3, Modifier.weight(1f))
-    }
-}
-
-@Composable
-private fun RTSRow2(l1: String, v1: String, l2: String, v2: String) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-        RTSLabeled(l1, v1, Modifier.weight(1f))
-        RTSLabeled(l2, v2, Modifier.weight(1f))
-    }
-}
-
-@Composable
-private fun RTSLabeled(label: String, value: String, modifier: Modifier = Modifier) {
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+private fun TinyCell(label: String, value: String, modifier: Modifier = Modifier) {
+    Row(
+        modifier,
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Text(label, fontSize = Dimens.fontSmall, color = TextSecondary,
-            modifier = Modifier.padding(end = 4.dp))
-        Text(value, fontSize = Dimens.fontCaption, fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(end = 3.dp))
+        Text(value, fontSize = Dimens.fontSmall, fontWeight = FontWeight.Medium,
             color = if (value == "--:--:--") TextSecondary else OnSurface)
     }
 }
 
+/** 月相/节气一行流式: "标题: ●{名称}{月}/{日} ..." 排不下自动折行 */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun EventGrid(events: List<MonthEvent>, color: Color) {
-    // 两列布局
-    Column(Modifier.fillMaxWidth()) {
-        events.chunked(2).forEach { pair ->
-            Row(Modifier.fillMaxWidth()) {
-                EventCell(pair[0], color, Modifier.weight(1f))
-                if (pair.size > 1) {
-                    EventCell(pair[1], color, Modifier.weight(1f))
-                } else {
-                    Spacer(Modifier.weight(1f))
-                }
+private fun EventFlowLine(
+    title: String, events: List<MonthEvent>, month: Int, dotColor: Color
+) {
+    androidx.compose.foundation.layout.FlowRow(
+        Modifier.fillMaxWidth().padding(top = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text("$title: ", fontSize = Dimens.fontSmall, fontWeight = FontWeight.Medium,
+            color = Primary)
+        events.forEach { e ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("●", fontSize = 8.sp, color = dotColor,
+                    modifier = Modifier.padding(end = 2.dp))
+                Text("${e.name}${month}/${e.day}",
+                    fontSize = Dimens.fontSmall, color = OnSurface)
             }
         }
     }
-}
-
-@Composable
-private fun EventCell(e: MonthEvent, color: Color, modifier: Modifier) {
-    Row(modifier.padding(vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically) {
-        Text("${padNum(e.day, 2)}日",
-            fontSize = Dimens.fontSmall, color = TextSecondary,
-            modifier = Modifier.width(28.dp))
-        Text(e.time,
-            fontSize = Dimens.fontSmall, color = OnSurface,
-            modifier = Modifier.padding(start = 2.dp, end = 4.dp))
-        Text(e.name,
-            fontSize = Dimens.fontSmall, fontWeight = FontWeight.Medium, color = color)
-    }
-}
-
-private fun padNum(n: Int, width: Int): String {
-    val s = n.toString()
-    return if (s.length >= width) s else " ".repeat(width - s.length) + s
 }
 
 private fun extractTime(s: String): String {
@@ -982,13 +1002,13 @@ private fun DayDetailDialog(
     day: DayInfo,
     todayY: Int, todayM: Int, todayD: Int,
     onDismiss: () -> Unit,
-    onOpenTopics: () -> Unit
+    onOpenAlmanacSheet: () -> Unit
 ) {
     val isToday = day.solarYear == todayY &&
                   day.solarMonth == todayM &&
                   day.solarDay == todayD
 
-    // 老黄历按需加载, 切换日期时重新拉取
+    // 老黄历摘要按需加载 (弹窗内只展示一行速览, 全量走底部抽屉)
     var almanac by remember(day.solarYear, day.solarMonth, day.solarDay) {
         mutableStateOf<DayAlmanac?>(null)
     }
@@ -1015,9 +1035,9 @@ private fun DayDetailDialog(
                 shadowElevation = 12.dp,
                 border = androidx.compose.foundation.BorderStroke(0.5.dp, PopupBorder)
             ) {
+                // 紧凑内容 (不再内嵌全量老黄历, 无需滚动) — 卡片小, 点空白即退出
                 Column(
                     Modifier
-                        .verticalScroll(rememberScrollState())
                         .padding(horizontal = 14.dp, vertical = 12.dp)
                 ) {
                     PopupTitleRow(day, isToday)
@@ -1029,7 +1049,7 @@ private fun DayDetailDialog(
                     )
                     PopupInfoLine(
                         "${day.yearGZ}年",
-                        (if (day.isLeapMonth) "闰" else "") + day.lunarMonthName,
+                        day.lunarMonthName,
                         "${day.lunarDayName}日"
                     )
                     PopupInfoLine(
@@ -1093,27 +1113,27 @@ private fun DayDetailDialog(
                         }
                     }
 
-                    // ── 老黄历区块 (按需展示, 失败则不显示) ──────
+                    // ── 老黄历速览 (一行摘要, 对齐鸿蒙 AlmanacInlineRow) ──
                     val a = almanac
                     if (a != null) {
-                        Spacer(Modifier.height(8.dp))
-                        PopupDividerLine()
                         Spacer(Modifier.height(6.dp))
-                        AlmanacPanel(a)
+                        PopupDividerLine()
+                        Spacer(Modifier.height(4.dp))
+                        AlmanacInlineRow(a)
                     }
 
-                    // ── 经典知识入口 (与鸿蒙 "📜 老黄历详情 ›" 对齐) ──
-                    Spacer(Modifier.height(8.dp))
+                    // ── 老黄历详情入口 → 打开底部抽屉 (点空白/下拉即退出) ──
+                    Spacer(Modifier.height(6.dp))
                     Row(
                         Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(Dimens.radiusSm))
-                            .clickable(onClick = onOpenTopics)
+                            .clickable(onClick = onOpenAlmanacSheet)
                             .padding(vertical = 6.dp),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("📜 老黄历经典 · 董公择日要诀 ›",
+                        Text("📜 老黄历详情 ›",
                             fontSize = Dimens.fontCaption,
                             fontWeight = FontWeight.Medium,
                             color = PopupGold)
@@ -1124,10 +1144,145 @@ private fun DayDetailDialog(
     }
 }
 
+// ─── 老黄历速览 (popup 内嵌入, 对齐鸿蒙 AlmanacInlineRow) ───────────────
+//   第 1 行: 二十八宿 + 十二神(黄道/黑道) + 冲煞
+//   第 2 行: 宜 (前 3 项) / 忌 (前 3 项) 色块徽章
+@Composable
+private fun AlmanacInlineRow(a: DayAlmanac) {
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("📜", fontSize = 11.sp, color = PopupGold,
+                modifier = Modifier.padding(end = 4.dp))
+            Text("${a.xiu}${a.xiuZheng}${a.xiuAnimal}",
+                fontSize = Dimens.fontCaption, fontWeight = FontWeight.Medium,
+                color = if (a.xiuLuck == "吉") PopupGreen else PopupRed)
+            Text("·", fontSize = Dimens.fontSmall, color = PopupSub,
+                modifier = Modifier.padding(horizontal = 4.dp))
+            Text("${a.twelveGod}${a.huangHei}",
+                fontSize = Dimens.fontCaption, fontWeight = FontWeight.Medium,
+                color = if (a.isHuangDao) PopupGold else PopupSub)
+            Text("·", fontSize = Dimens.fontSmall, color = PopupSub,
+                modifier = Modifier.padding(horizontal = 4.dp))
+            Text("冲${a.chongShengXiao}煞${a.sha}",
+                fontSize = Dimens.fontCaption, color = PopupSub)
+        }
+        if (a.yi.isNotEmpty() || a.ji.isNotEmpty()) {
+            Spacer(Modifier.height(3.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (a.yi.isNotEmpty()) {
+                    Text("宜", fontSize = Dimens.fontCaption, fontWeight = FontWeight.Medium,
+                        color = PopupText,
+                        modifier = Modifier
+                            .background(PopupGreen, RoundedCornerShape(4.dp))
+                            .padding(horizontal = 5.dp, vertical = 1.dp))
+                    Text(" " + a.yi.take(3).joinToString(" "),
+                        fontSize = Dimens.fontCaption, color = PopupSub,
+                        modifier = Modifier.padding(start = 4.dp, end = 6.dp),
+                        maxLines = 1)
+                }
+                if (a.ji.isNotEmpty()) {
+                    Text("忌", fontSize = Dimens.fontCaption, fontWeight = FontWeight.Medium,
+                        color = PopupText,
+                        modifier = Modifier
+                            .background(PopupRed, RoundedCornerShape(4.dp))
+                            .padding(horizontal = 5.dp, vertical = 1.dp))
+                    Text(" " + a.ji.take(3).joinToString(" "),
+                        fontSize = Dimens.fontCaption, color = PopupSub,
+                        modifier = Modifier.padding(start = 4.dp),
+                        maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+// ─── 老黄历底部抽屉 (ModalBottomSheet, 对齐鸿蒙 bindSheet) ───────────────
+//   · 点遮罩/下拉即关闭, 不再需要后退键
+//   · 内含全量 AlmanacPanel + "董公择日经典知识"入口
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AlmanacSheetBottomSheet(
+    day: DayInfo,
+    onDismiss: () -> Unit,
+    onOpenTopics: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var almanac by remember(day.solarYear, day.solarMonth, day.solarDay) {
+        mutableStateOf<DayAlmanac?>(null)
+    }
+    LaunchedEffect(day.solarYear, day.solarMonth, day.solarDay) {
+        almanac = CalendarRepository.getAlmanac(
+            day.solarYear, day.solarMonth, day.solarDay)
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = PopupBg,
+        shape = RoundedCornerShape(topStart = Dimens.radiusLg, topEnd = Dimens.radiusLg),
+        dragHandle = { BottomSheetDefaults.DragHandle() }
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = 620.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = Dimens.paddingLg, vertical = Dimens.paddingSm)
+        ) {
+            // 日期标题
+            Text(
+                "${YearUtil.astroYearToStr(day.solarYear)}年${day.solarMonth}月${day.solarDay}日" +
+                " · ${day.lunarMonthName}${day.lunarDayName}",
+                fontSize = Dimens.fontSubtitle, fontWeight = FontWeight.Bold,
+                color = PopupText,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(8.dp))
+
+            val a = almanac
+            if (a != null) {
+                AlmanacPanel(a)
+            } else {
+                Text("数据加载中...",
+                    fontSize = Dimens.fontBody, color = PopupSub,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                    textAlign = TextAlign.Center)
+            }
+
+            // 董公择日经典知识入口 (与鸿蒙 topicsEntrySection 对齐)
+            Spacer(Modifier.height(8.dp))
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(Dimens.radiusSm))
+                    .background(PopupBorder.copy(alpha = 0.3f))
+                    .clickable(onClick = onOpenTopics)
+                    .padding(Dimens.paddingMd),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("📖 董公择日 · 总论 · 口诀 · 方位",
+                    fontSize = Dimens.fontBody, fontWeight = FontWeight.Medium,
+                    color = PopupGold, modifier = Modifier.weight(1f))
+                Text("›", fontSize = 20.sp, color = PopupGold)
+            }
+            Spacer(Modifier.height(Dimens.paddingLg))
+        }
+    }
+}
+
 // ─── 老黄历面板 ────────────────────────────────────────────────────────
 //
 //  紧凑展示: 二十八宿/黄道/冲煞 + 五吉神 + 彭祖 + 神煞 + 宜忌 + 用事 + 吉时.
-//  仅在 DayDetailDialog 内调用, 滚动容器由外层提供.
+//  在 AlmanacSheetBottomSheet 内调用, 滚动容器由外层提供.
 
 private val ZhiNames = listOf("子","丑","寅","卯","辰","巳",
                               "午","未","申","酉","戌","亥")

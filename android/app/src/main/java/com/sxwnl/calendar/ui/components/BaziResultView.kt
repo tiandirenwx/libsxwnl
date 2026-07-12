@@ -480,7 +480,7 @@ private fun jieQiParagraph(arg: BaziResultArg): String {
     var s = ""
     val dq = strip(arg.result.dingQiType)
     if (dq.isNotEmpty()) s += "依据${dq}。"
-    val jq = strip(arg.result.jieQi).replace(Regex("\n+"), "；")
+    val jq = arg.result.jieQi.trim().replace(Regex("\n+"), "；")
     if (jq.isNotEmpty()) s += "${jq}。"
     if (arg.result.siLing.isNotEmpty()) s += "命主月令司令：${arg.result.siLing}"
     return s

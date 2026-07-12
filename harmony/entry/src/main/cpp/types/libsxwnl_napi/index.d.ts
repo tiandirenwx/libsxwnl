@@ -6,6 +6,7 @@ export const getJieQiList: (year: number) => object[] | null;
 export const getYearLeapMonth: (year: number) => number;
 export const getLunarMonths: (year: number) => object[] | null;
 export const getLunarMonthDays: (year: number, month: number, isLeap: boolean, isSpec: boolean) => number;
+export const getLunarDayName: (day: number) => string;
 export const getSolarMonthValidDays: (year: number, month: number) => number[];
 export const getYearCalendar: (year: number) => object[] | null;
 export const calcBazi: (params: object) => object | null;

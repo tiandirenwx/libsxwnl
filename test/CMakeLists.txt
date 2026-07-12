@@ -21,5 +21,8 @@ set_target_properties(test_sxwnl PROPERTIES
 # 添加子目录 (平气/定气 节气边界测试)
 add_subdirectory(pingqi_dingqi)
 
+# 添加子目录 (阴历月名: 古历十三月/后九月 与普通闰月 验证)
+add_subdirectory(lunar_month_name)
+
 # 添加子目录 (高精度天体位置"备件"对比测试, 不修改主库)
 add_subdirectory(eph_hp)

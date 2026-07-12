@@ -15,6 +15,7 @@ static napi_value Init(napi_env env, napi_value exports) {
         {"getYearLeapMonth",  NapiGetYearLeapMonth},
         {"getLunarMonths",    NapiGetLunarMonths},
         {"getLunarMonthDays", NapiGetLunarMonthDays},
+        {"getLunarDayName",   NapiGetLunarDayName},
         {"getSolarMonthValidDays", NapiGetSolarMonthValidDays},
         {"getYearCalendar",   NapiGetYearCalendar},
         {"calcDayRTS",        NapiCalcDayRTS},

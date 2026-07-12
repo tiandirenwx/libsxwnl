@@ -441,6 +441,11 @@ export class NativeBridge {
     return sxwnl.getLunarMonthDays(year, month, isLeap, isSpec) as number
   }
 
+  // 农历日名(初一../三十) — 底层复用 Rmc[] 表统一取名
+  static getLunarDayName(day: number): string {
+    return sxwnl.getLunarDayName(day) as string
+  }
+
   // 公历某年月真实存在的日号(升序); 自动跳过 1582-10 改历缺口, 并给出正确月长
   static getSolarMonthValidDays(year: number, month: number): number[] {
     return (sxwnl.getSolarMonthValidDays(year, month) ?? []) as number[]

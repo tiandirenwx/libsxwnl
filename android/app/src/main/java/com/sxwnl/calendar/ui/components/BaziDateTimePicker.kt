@@ -387,9 +387,12 @@ private fun DateWheels(
                 )
             }
 
-            // 日
+            // 日 — 农历模式显示"初一/廿九"式名称, 公历显示"1日"
             WheelPicker(
-                items = validDays.map { "${it}日" },
+                items = validDays.map {
+                    if (inputMode == BirthInputMode.LUNAR) BaziCalc.lunarDayName(it)
+                    else "${it}日"
+                },
                 selectedIndex = validDays.indexOf(day).coerceAtLeast(0),
                 onSelectedChange = { idx ->
                     validDays.getOrNull(idx)?.let(onDayChange)

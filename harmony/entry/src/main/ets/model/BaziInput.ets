@@ -142,6 +142,13 @@ export class BaziCalc {
     return n < 10 ? `0${n}` : `${n}`
   }
 
+  // 农历日名(初一../三十). 统一走底层 C++(复用 sx_lang_zh.h 的 Rmc[] 表),
+  // 不在各平台重复维护字符串表; native 返回空时回退 "${d}日".
+  static lunarDayName(d: number): string {
+    const s: string = NativeBridge.getLunarDayName(d)
+    return s.length > 0 ? s : `${d}日`
+  }
+
   // 出生时间 → 一条记录文本(参考截图: "公历 2026年06月02日 13点16分")
   static formatRecord(sel: DateSelection, lunarMonths: LunarMonth[]): string {
     const ymd: string = `${BaziCalc.formatYear(sel.year)}${BaziCalc.pad2(sel.month)}月${BaziCalc.pad2(sel.day)}日`
@@ -154,7 +161,7 @@ export class BaziCalc {
           break
         }
       }
-      return `农历 ${BaziCalc.formatYear(sel.year)}${mName}${sel.day}日 ${hm}`
+      return `农历 ${BaziCalc.formatYear(sel.year)}${mName}${BaziCalc.lunarDayName(sel.day)} ${hm}`
     }
     return `公历 ${ymd} ${hm}`
   }

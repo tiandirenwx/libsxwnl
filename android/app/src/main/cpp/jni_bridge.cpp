@@ -244,6 +244,14 @@ Java_com_sxwnl_calendar_bridge_SxwnlNative_getLunarMonthDays(
     return sxwnl_get_lunar_month_days(year, month, isLeap, isSpec);
 }
 
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_sxwnl_calendar_bridge_SxwnlNative_getLunarDayName(
+    JNIEnv *env, jclass, jint day) {
+    char buf[16] = {0};
+    sxwnl_get_lunar_day_name(day, buf, sizeof(buf));
+    return env->NewStringUTF(buf);
+}
+
 extern "C" JNIEXPORT jintArray JNICALL
 Java_com_sxwnl_calendar_bridge_SxwnlNative_getSolarMonthValidDays(
     JNIEnv *env, jclass, jint year, jint month) {

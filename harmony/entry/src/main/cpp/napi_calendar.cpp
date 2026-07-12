@@ -99,6 +99,13 @@ napi_value NapiGetLunarMonthDays(napi_env env, napi_callback_info info) {
     return js_int(env, sxwnl_get_lunar_month_days(a.intAt(0), a.intAt(1), a.boolAt(2), a.boolAt(3)));
 }
 
+napi_value NapiGetLunarDayName(napi_env env, napi_callback_info info) {
+    NArgs a(env, info, 1);
+    char buf[16] = {0};
+    sxwnl_get_lunar_day_name(a.intAt(0), buf, sizeof(buf));
+    return js_str(env, buf);
+}
+
 napi_value NapiGetSolarMonthValidDays(napi_env env, napi_callback_info info) {
     NArgs a(env, info, 2);
     int days[31];

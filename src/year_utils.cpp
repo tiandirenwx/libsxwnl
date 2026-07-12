@@ -48,31 +48,42 @@ int year2Ayear(const std::string &raw)
     stripWhitespace(s);
     stripTrailingNian(s);
 
-    int sign = 1;
-
-    // 公元前 / 前 / -  前缀检测
+    // 与上游 tools.js year2Ayear 及两端 YearUtil 对齐:
+    //   * B / b / * / 公元前 / 前  => 公元前记法, 天文年 = 1 - n
+    //   * 前导 '-'                 => 直接天文负年, 天文年 = -n  (如 "-220" = 天文 -220)
+    //   * 公元 / 纯数字             => 直接天文年, 天文年 = n
+    // 注意: 历史上 C++ 曾把 '-' 也当"公元前", 导致 "-220" 被解析成天文 -219,
+    //       与 JS/HarmonyOS 不一致(生肖差一位), 此处修正。
     const std::string kGongYuan    = "\xE5\x85\xAC\xE5\x85\x83";          // 公元
     const std::string kGongYuanQian= "\xE5\x85\xAC\xE5\x85\x83\xE5\x89\x8D";// 公元前
     const std::string kQian        = "\xE5\x89\x8D";                       // 前
 
+    bool bc = false;       // 公元前记法: 天文 = 1 - n
+    bool negAstro = false; // 前导 '-': 天文 = -n
+
     if (startsWith(s, kGongYuanQian))
     {
         s.erase(0, kGongYuanQian.size());
-        sign = -1;
+        bc = true;
     }
     else if (startsWith(s, kQian))
     {
         s.erase(0, kQian.size());
-        sign = -1;
-    }
-    else if (!s.empty() && s[0] == '-')
-    {
-        s.erase(0, 1);
-        sign = -1;
+        bc = true;
     }
     else if (startsWith(s, kGongYuan))
     {
         s.erase(0, kGongYuan.size());
+    }
+    else if (!s.empty() && (s[0] == 'B' || s[0] == 'b' || s[0] == '*'))
+    {
+        s.erase(0, 1);
+        bc = true;
+    }
+    else if (!s.empty() && s[0] == '-')
+    {
+        s.erase(0, 1);
+        negAstro = true;
     }
 
     if (s.empty()) return INT_MIN;
@@ -93,15 +104,20 @@ int year2Ayear(const std::string &raw)
         return INT_MIN;
     }
 
-    if (sign == 1)
+    if (bc)
     {
-        if (n > INT_MAX) return INT_MAX;
-        return static_cast<int>(n);
+        // 公元前从 B.C.1 起, 没有公元前 0 年
+        if (n < 1) return INT_MIN;
+        long long a = 1 - n;
+        if (a < INT_MIN) return INT_MIN;
+        return static_cast<int>(a);
     }
-    // 公元前 X => 天文 1 - X
-    long long a = 1 - n;
-    if (a < INT_MIN) return INT_MIN;
-    return static_cast<int>(a);
+    if (negAstro)
+    {
+        return static_cast<int>(-n);
+    }
+    if (n > INT_MAX) return INT_MAX;
+    return static_cast<int>(n);
 }
 
 std::string Ayear2year(int aYear, bool fullStyle)

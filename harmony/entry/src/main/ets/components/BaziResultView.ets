@@ -4,6 +4,7 @@ import { GAN, ZHI, BaziCalc } from '../model/BaziInput'
 import { image } from '@kit.ImageKit'
 import { fileIo as fs } from '@kit.CoreFileKit'
 import { common } from '@kit.AbilityKit'
+import { photoAccessHelper } from '@kit.MediaLibraryKit'
 
 /** 结果页入参 (class 形式, 满足 ArkTS 严格类型规则) */
 export class BaziResultArg {
@@ -157,12 +158,20 @@ export struct BaziResultView {
   simpleCard() {
     Column() {
       this.simpleReport()
-      Button('保存为图片')
+      // 使用安全控件 SaveButton: 用户点击后系统授予一次性写相册授权, 无需声明/申请权限。
+      SaveButton({ icon: SaveIconStyle.FULL_FILLED, text: SaveDescription.SAVE_IMAGE, buttonType: ButtonType.Capsule })
         .width('60%').height(40).fontSize(AppDimens.FONT_BODY).fontWeight(FontWeight.Medium)
-        .fontColor(AppColors.PRIMARY_DARK).backgroundColor(AppColors.ACCENT)
+        .fontColor(AppColors.PRIMARY_DARK).iconColor(AppColors.PRIMARY_DARK)
+        .backgroundColor(AppColors.ACCENT)
         .borderRadius(AppDimens.BORDER_RADIUS_LG)
         .margin({ top: AppDimens.PADDING_SM, bottom: AppDimens.PADDING_SM })
-        .onClick(() => this.saveImage())
+        .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
+          if (result === SaveButtonOnClickResult.SUCCESS) {
+            this.saveImageToGallery()
+          } else {
+            this.toast('没有相册写入授权')
+          }
+        })
     }
     .width('100%').alignItems(HorizontalAlign.Center)
   }
@@ -267,7 +276,7 @@ export struct BaziResultView {
     let s: string = ''
     const dq: string = this.strip(this.arg.result.dingQiType)
     if (dq.length > 0) s += `依据${dq}。`
-    const jq: string = this.strip(this.arg.result.jieQi).replace(/\n+/g, '；')
+    const jq: string = this.arg.result.jieQi.trim().replace(/\n+/g, '；')
     if (jq.length > 0) s += jq + '。'
     if (this.arg.result.siLing !== undefined && this.arg.result.siLing.length > 0) s += `命主月令司令：${this.arg.result.siLing}`
     return s
@@ -363,34 +372,37 @@ export struct BaziResultView {
     }
   }
 
-  // 截图保存; 注意:
-  //  · ImagePacker 必须无论编码成功 / 失败都 release(), 否则 native 资源泄漏;
-  //  · 文件描述符必须用 finally 释放, 即使 writeSync 抛异常.
-  saveImage() {
-    this.getUIContext().getComponentSnapshot().get('baziSimpleCard').then((pm: image.PixelMap) => {
-      const packer: image.ImagePacker = image.createImagePacker()
+  // 截图并保存到系统相册。
+  //  · 必须在 SaveButton(安全控件)的 onClick 回调内、且授权成功后调用, 由系统授予一次性写相册权限;
+  //  · ImagePacker / PixelMap / 文件描述符均确保释放, 避免 native 资源泄漏。
+  async saveImageToGallery() {
+    let pm: image.PixelMap | undefined
+    const packer: image.ImagePacker = image.createImagePacker()
+    try {
+      pm = await this.getUIContext().getComponentSnapshot().get('baziSimpleCard')
       const opts: image.PackingOption = { format: 'image/png', quality: 100 }
-      packer.packToData(pm, opts).then((buf: ArrayBuffer) => {
-        try {
-          const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext
-          const path: string = `${ctx.filesDir}/bazi_${Date.now()}.png`
-          const f = fs.openSync(path, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE)
-          try {
-            fs.writeSync(f.fd, buf)
-          } finally {
-            fs.closeSync(f)
-          }
-          this.toast(`已保存到:\n${path}`, 3500)
-        } catch (e) {
-          this.toast('保存失败')
-        } finally {
-          packer.release()
-        }
-      }).catch(() => {
-        packer.release()
-        this.toast('图片编码失败')
-      })
-    }).catch(() => { this.toast('截图失败') })
+      const buf: ArrayBuffer = await packer.packToData(pm, opts)
+
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext
+      const helper = photoAccessHelper.getPhotoAccessHelper(ctx)
+      // createAsset(photoType, extension): 配合安全控件时无需权限即可创建相册资源
+      const uri: string = await helper.createAsset(photoAccessHelper.PhotoType.IMAGE, 'png')
+      const f = await fs.open(uri, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE)
+      try {
+        await fs.write(f.fd, buf)
+      } finally {
+        await fs.close(f.fd)
+      }
+      this.toast('已保存到相册')
+    } catch (e) {
+      console.error('saveImageToGallery failed: ' + JSON.stringify(e))
+      this.toast('保存失败')
+    } finally {
+      packer.release()
+      if (pm !== undefined) {
+        await pm.release()
+      }
+    }
   }
 
   // ════════════════════ 专业版 ════════════════════

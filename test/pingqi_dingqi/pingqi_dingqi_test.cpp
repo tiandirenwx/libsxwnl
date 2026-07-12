@@ -668,6 +668,63 @@ void verifyHourPillarSwitch(int Y, LiFaType lifa, Reporter &rep)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 业务逻辑测试 #2b: 整点时辰边界排盘 (四柱反推往返一致性)
+//   四柱反推(sxwnl_bazi_reverse)对每个时辰返回其"起始整点"(除子时外均为奇数整点:
+//   5:00→卯, 7:00→辰 ...), 回填成 hour:00:00 后再排盘。
+//   历史 bug: 正推 SC = int2((jd - D) * 12) 在整点边界因 long double 量化(误差可达
+//   ~3e-9)使值略小于整数(如 3.99999999627), floor 后归入前一个时辰(戊辰误判为丁卯)。
+//   修复: SC 计算加 1e-7 epsilon。此测试直接从 Time(Y,M,D,h,0,0) 排盘, 断言时支
+//   等于整数映射 (h+1)/2 % 12, 覆盖 reverse 会返回的所有整点。
+// ─────────────────────────────────────────────────────────────────────────────
+void verifyHourPillarExactBoundary(int Y, LiFaType lifa, Reporter &rep)
+{
+    for (int h = 0; h < 24; h++)
+    {
+        int step = (h + 1) / 2;
+        if (step >= 12) step = 0;
+        int expZhi = step % 12;
+
+        BaziSnapshot b;
+        try
+        {
+            SBaziInputPara p;
+            p.name = "T";
+            p.gender = false;
+            p.isAst = false;
+            p.jw = {120, 39.9, "test", "test"};
+            p.lifa = lifa;
+            p.calendar = CalendarSolar;
+            p.birthDayTime = Time(Y, 6, 15, h, 0, 0);
+            p.isRun = false;
+            p.isSpec = false;
+            BaziBase bb(p);
+            bb.calcBaziPaiPan();
+            b.sizhu = bb.getSiZhuIndex();
+            b.valid = true;
+        }
+        catch (...) { b.valid = false; }
+
+        if (!b.valid)
+        {
+            rep.fail({Y, "整点时辰", lifaName(lifa),
+                      "h=" + std::to_string(h) + " 排盘失败"});
+            continue;
+        }
+        if (b.sizhu[7] != expZhi)
+        {
+            rep.fail({Y, "整点时辰", lifaName(lifa),
+                      "h=" + std::to_string(h) +
+                      " 时支=" + std::to_string(b.sizhu[7]) +
+                      " 期望=" + std::to_string(expZhi)});
+        }
+        else
+        {
+            rep.ok();
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 业务逻辑测试 #3: 真太阳时口径 (isAst=true) 节气交接自洽
 //   代码 (bazi.cpp:259-268): mHeadJieQiAstJd_ = JD::calcAST(mHeadJieQiJd_, J)
 //   即真太阳时下节气 JD = 平太阳时 JD + 时差方程修正.
@@ -1444,6 +1501,7 @@ int main(int argc, char *argv[])
             verifyYearScan(Y, lifa, rep, verbose);
             verifyDayPillarSwitch(Y, lifa, rep);
             verifyHourPillarSwitch(Y, lifa, rep);
+            verifyHourPillarExactBoundary(Y, lifa, rep);
             if (!fastMode)
             {
                 verifyAstYearScan(Y, lifa, rep);
