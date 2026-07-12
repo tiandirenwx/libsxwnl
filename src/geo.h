@@ -27,14 +27,16 @@ struct TimezoneGroup
 class GeoPostion
 {
 public:
+	// GeoPostion 是只读的经纬度查表：jwMap 仅在构造时由 init() 建立，之后全部为 const 只读访问。
+	// 因此作为共享单例本身即线程安全（C++11 保证单例静态初始化线程安全，且并发只读 std::map 安全）。
+	// 注意：init()/SQdecode() 会修改内部状态，已置为 private，禁止在构造完成后再调用，
+	// 以保证“构造后不可变”这一线程安全前提。
 	static GeoPostion &getInstance()
 	{
 		static GeoPostion instance;
 		return instance;
 	}
-	void init();
 	void JWdecode(const std::string &v,double &jin,double &wei) const;
-	void SQdecode();
 	JINGWEI getCityGeoPos(const std::string &pName,const std::string &aName) const;
 	JINGWEI getCityGeoPos() const;
 	JINGWEI getDefaultGeoPos() const;
@@ -54,6 +56,10 @@ private:
 	~GeoPostion();
 	GeoPostion(const GeoPostion &) = delete;
 	GeoPostion &operator=(const GeoPostion &) = delete;
+
+	// 仅供构造时初始化查表使用，不可在构造后调用（保证“构造后不可变”的线程安全前提）
+	void init();
+	void SQdecode();
 
 	// SQv 解码内部实现 (init() 调用一次).
 	void buildTimezoneGroups();

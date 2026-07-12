@@ -47,9 +47,12 @@ struct SJ_S
 class SunMoonRiseSet
 {
 public:
+    // SunMoonRiseSet 是“先 calcRTS 计算、再读取”的有状态对象（E/dt/rts/L/fa 由 calcRTS 及
+    // setter 写入，getter 读取）。为避免多线程共享同一实例时的数据竞争，getInstance 返回
+    // thread_local 实例，使每个线程拥有独立的计算状态，从而在 Android/iOS 等多线程环境下安全使用。
     static SunMoonRiseSet &getInstance()
     {
-        static SunMoonRiseSet instance;
+        thread_local SunMoonRiseSet instance;
         return instance;
     }
 

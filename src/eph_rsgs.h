@@ -185,9 +185,13 @@ private:
 class EphRsgs
 {
 public:
+    // EphRsgs 是“先 init 计算、再读取”的有状态对象（Zs 插值表、pstPara 参数由 init 写入，
+    // feature/jieX3/chazhi 等读取）。为避免多线程共享同一实例时的数据竞争，getInstance
+    // 返回 thread_local 实例，使每个线程拥有独立的计算状态，从而在 Android/iOS 等多线程
+    // 环境下安全使用。
     static EphRsgs &getInstance()
     {
-        static EphRsgs instance;
+        thread_local EphRsgs instance;
         return instance;
     }
 

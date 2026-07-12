@@ -5,7 +5,34 @@
 #include "JD.h"
 
 
-SSQ::SSQ()
+namespace
+{
+// 气朔解压缩用的字符串替换工具（仅本编译单元内部使用，置于匿名命名空间以避免外部链接）
+void str_replace(std::string & str, const std::string & strsrc, const std::string & strdst)
+{
+	std::string::size_type pos = 0;
+	std::string::size_type srclen = strsrc.size();
+	std::string::size_type dstlen = strdst.size();
+	while ((pos = str.find(strsrc, pos)) != std::string::npos)
+	{
+		str.replace(pos, srclen, strdst);
+		pos += dstlen;
+	}
+}
+
+// SSQ 的常量修正表：定朔/定气修正字符串及直线拟合参数。
+// 这些数据构造后只读，进程内共享同一份，多线程读取安全。
+struct SSQConstData
+{
+	std::vector<long double> suoKB; //朔直线拟合参数
+	std::vector<long double> qiKB;  //气直线拟合参数
+	std::string SB;                 //定朔修正表
+	std::string QB;                 //定气修正表
+
+	SSQConstData();
+};
+
+SSQConstData::SSQConstData()
 {
 
 	std::string  suoS = "", qiS = "";
@@ -41,8 +68,8 @@ SSQ::SSQ()
 
 
 
-	SB = jieya(suoS);  //定朔修正表解压
-	QB = jieya(qiS);   //定气修正表解压
+	SB = SSQ::jieya(suoS);  //定朔修正表解压
+	QB = SSQ::jieya(qiS);   //定气修正表解压
 
 
 	//朔直线拟合参数
@@ -62,7 +89,7 @@ SSQ::SSQ()
 		1947168.00//  619-01-21
 	};
 
-	suoKB = new std::vector<long double>(suoKBTmp, suoKBTmp + sizeof(suoKBTmp) / sizeof(long double));
+	suoKB.assign(suoKBTmp, suoKBTmp + sizeof(suoKBTmp) / sizeof(long double));
 
 	long double qiKBTmp[] = {
 		1640650.479938,15.21842500, // -221-11-09 h=0.01709 古历·秦汉
@@ -104,27 +131,25 @@ SSQ::SSQ()
 		2322147.76// 1645-09-21
 	};
 
-	qiKB = new std::vector<long double>(qiKBTmp, qiKBTmp + sizeof(qiKBTmp) / sizeof(long double));
+	qiKB.assign(qiKBTmp, qiKBTmp + sizeof(qiKBTmp) / sizeof(long double));
+}
+
+// 进程内唯一的只读常量表实例。C++11 保证函数内静态局部变量的初始化线程安全。
+const SSQConstData& ssqConstData()
+{
+	static const SSQConstData data;
+	return data;
+}
+
+} // namespace
+
+SSQ::SSQ()
+{
 }
 
 SSQ::~SSQ()
 {
-	delete suoKB;
-	delete qiKB;
 }
-
-void str_replace(std::string & str, const std::string strsrc, const std::string strdst)
-{
-	std::string::size_type pos = 0;//位置
-	std::string::size_type srclen = strsrc.size();//要替换的字符串大小
-	std::string::size_type dstlen = strdst.size();//目标字符串大小
-	while ((pos = str.find(strsrc, pos)) != std::string::npos)
-	{
-		str.replace(pos, srclen, strdst);
-		pos += dstlen;
-	}
-}
-
 
 std::string SSQ::jieya(std::string s) { //气朔解压缩
 	std::string o = "0000000000", o2 = o + o;
@@ -167,13 +192,8 @@ int  SSQ::calc(long double jd, QSType qs)
 	int i;
 	long double D;
 	std::string n;
-	std::vector<long double> B = *suoKB;
-	long double pc = 14;
-	//如果查的是气朔
-	if (qs == QType)
-	{
-		B = *qiKB, pc = 7;
-	}
+	const std::vector<long double>& B = (qs == QType) ? ssqConstData().qiKB : ssqConstData().suoKB;
+	long double pc = (qs == QType) ? 7 : 14;
 
 	long double f1 = B[0] - pc, f2 = B[B.size() - 1] - pc, f3 = 2436935;   // 2436935为1960年1月1日JD
 
@@ -214,11 +234,11 @@ int  SSQ::calc(long double jd, QSType qs)
 		if (qs == QType)
         {
 			D = std::floor(qi_low(std::floor((jd + pc - 2451259) / 365.2422 * 24) * PI / 12) + 0.5); //2451259是1999.3.21,太阳视黄经为0,春分.定气计算
-			n = QB.substr(std::floor((jd - f2) / 365.2422 * 24), 1); //找定气修正值
+			n = ssqConstData().QB.substr(std::floor((jd - f2) / 365.2422 * 24), 1); //找定气修正值
 		}
 		else {
 			D = std::floor(so_low(std::floor((jd + pc - 2451551) / 29.5306) * PI * 2) + 0.5); //2451551是2000.1.7的那个朔日,黄经差为0.定朔计算
-			n = SB.substr(std::floor((jd - f2) / 29.5306), 1); //找定朔修正值
+			n = ssqConstData().SB.substr(std::floor((jd - f2) / 29.5306), 1); //找定朔修正值
 		}
 		if (n == "1")
         {
