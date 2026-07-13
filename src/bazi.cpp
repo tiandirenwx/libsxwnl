@@ -700,7 +700,10 @@ std::tuple<std::string, std::string, std::string> BaziBase::getLunarInfo() const
     }
     else
     {
-        if (mSLunarDay_.isNext)
+        // 古历区间(y∈[-721,-104])的重月(isNext)只作转换回环标记, 显示仍用正常农历名;
+        // 特殊名只保留"后九月/十三月"(上面 bdLeapYear 分支处理)。其余年代重月才用 SYmc(拾贰月)。
+        const bool ancient = (solarYear >= -721 && solarYear <= -104);
+        if (mSLunarDay_.isNext && !ancient)
         {
             strTemp2 = SYmc[mSLunarDay_.monthIdx];
         }

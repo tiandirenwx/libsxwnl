@@ -94,7 +94,10 @@ std::string LunarYear::getNianLiStr()
         }
         else
         {
-            if (vecSpec[i])
+            // 古历区间(y∈[-721,-104])重月只作转换回环标记, 显示用正常农历名;
+            // 特殊名只保留"后九月/十三月"(上面 bdLeapYear 分支)。其余年代重月才用 SYmc。
+            const bool ancient = (y >= -721 && y <= -104);
+            if (vecSpec[i] && !ancient)
             {
                 strTemp2 = SYmc[vecYueName[i] - 1];
             }

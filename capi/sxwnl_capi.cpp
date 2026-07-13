@@ -62,15 +62,22 @@ static std::string gz_str(GZ gz) {
 //   重月(isSpec, 非闰): 用 SYmc[](壹/贰/…) 与正常同名月区分
 //   其余普通月/普通闰月: "闰"+Ymc[]
 // month 为月号 (1-12, 与 Day::getLunarMonth() 一致)
+//
+// 重月(isSpec)显示规则:
+//   · 古历区间(y∈[-721,-104]): 重月(如"后一个十月/冬月")只作转换回环标记, 显示仍用
+//     正常农历名(十月/冬月); 该区间真正需要特殊名的只有年终置闰的"后九月/十三月",
+//     已在上面 isLeap 分支处理。此处不能用 SYmc, 否则年历会误显示"拾/拾壹月"。
+//   · 其余年代(如 CE 23/239 年连续两个十二月): 用 SYmc[](拾贰月)区分, 与上游 lunar.js 一致。
 static std::string lunar_month_str(int year, int month, bool isLeap, bool isSpec) {
     if (isLeap) {
         if (year >= -721 && year < -220) return std::string(BDLeapYueName[0]) + "月";
         if (year >= -220 && year <= -104) return std::string(BDLeapYueName[1]) + "月";
     }
+    const bool ancient = (year >= -721 && year <= -104);
     std::string prefix = isLeap ? "闰" : "";
     std::string base;
     if (month >= 1 && month <= 12)
-        base = isSpec ? SYmc[month - 1] : Ymc[month - 1];
+        base = (isSpec && !ancient) ? SYmc[month - 1] : Ymc[month - 1];
     else
         base = std::to_string(month);
     return prefix + base + "月";
@@ -535,9 +542,11 @@ static void enum_lunar_window(int year, std::vector<SxwnlLunarMonth> &v) {
         if (bd) {
             name = t1 + "月";   // 后九月 / 十三月
         } else {
-            // 重月(isSpec)用 SYmc[] 与正常同名月区分
+            // 古历区间(y∈[-721,-104])的重月只作转换回环标记(is_spec), 显示用正常农历名;
+            // 特殊名只保留"后九月/十三月"(上面 bd 分支)。其余年代重月才用 SYmc(拾贰月)。
+            const bool ancient = (year >= -721 && year <= -104);
             std::string t2 = (yn >= 1 && yn <= 12)
-                ? (vecSpec[i] ? SYmc[yn - 1] : Ymc[yn - 1])
+                ? ((vecSpec[i] && !ancient) ? SYmc[yn - 1] : Ymc[yn - 1])
                 : std::to_string(yn);
             name = t1 + t2 + "月";
         }
@@ -660,8 +669,11 @@ int sxwnl_get_year_calendar(int year, SxwnlYearCalMonth *out, int max_count) {
                 }
             }
             if (!bd) {
+                // 古历区间(y∈[-721,-104])的重月只用于转换回环标记, 显示仍走正常农历名;
+                // 特殊名只保留"后九月/十三月"(上面 bd 分支已处理)。其余年代重月才用 SYmc(拾贰月)。
+                const bool ancient = (year >= -721 && year <= -104);
                 std::string t2 = (ymi >= 0 && ymi < 12)
-                    ? (isSpec ? SYmc[ymi] : Ymc[ymi])
+                    ? ((isSpec && !ancient) ? SYmc[ymi] : Ymc[ymi])
                     : std::to_string(ymi);
                 monthName = (isLeap ? "闰" : "") + t2 + "月";
             }

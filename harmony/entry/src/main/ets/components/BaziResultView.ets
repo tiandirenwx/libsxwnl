@@ -159,19 +159,23 @@ export struct BaziResultView {
     Column() {
       this.simpleReport()
       // 使用安全控件 SaveButton: 用户点击后系统授予一次性写相册授权, 无需声明/申请权限。
-      SaveButton({ icon: SaveIconStyle.FULL_FILLED, text: SaveDescription.SAVE_IMAGE, buttonType: ButtonType.Capsule })
-        .width('60%').height(40).fontSize(AppDimens.FONT_BODY).fontWeight(FontWeight.Medium)
-        .fontColor(AppColors.PRIMARY_DARK).iconColor(AppColors.PRIMARY_DARK)
-        .backgroundColor(AppColors.ACCENT)
-        .borderRadius(AppDimens.BORDER_RADIUS_LG)
-        .margin({ top: AppDimens.PADDING_SM, bottom: AppDimens.PADDING_SM })
-        .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
-          if (result === SaveButtonOnClickResult.SUCCESS) {
-            this.saveImageToGallery()
-          } else {
-            this.toast('没有相册写入授权')
-          }
-        })
+      // SaveButton 属性集不含 margin, 需用外层容器设置外边距。
+      Column() {
+        SaveButton({ icon: SaveIconStyle.FULL_FILLED, text: SaveDescription.SAVE_IMAGE, buttonType: ButtonType.Capsule })
+          .width('60%').height(40).fontSize(AppDimens.FONT_BODY).fontWeight(FontWeight.Medium)
+          .fontColor(AppColors.PRIMARY_DARK).iconColor(AppColors.PRIMARY_DARK)
+          .backgroundColor(AppColors.ACCENT)
+          .borderRadius(AppDimens.BORDER_RADIUS_LG)
+          .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
+            if (result === SaveButtonOnClickResult.SUCCESS) {
+              this.saveImageToGallery()
+            } else {
+              this.toast('没有相册写入授权')
+            }
+          })
+      }
+      .width('100%').alignItems(HorizontalAlign.Center)
+      .margin({ top: AppDimens.PADDING_SM, bottom: AppDimens.PADDING_SM })
     }
     .width('100%').alignItems(HorizontalAlign.Center)
   }

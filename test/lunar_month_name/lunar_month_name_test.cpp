@@ -207,6 +207,110 @@ void testKnownDay() {
     }
 }
 
+// ─────────────────────────────────────────────
+// Part F: 年历 API (sxwnl_get_year_calendar) —— 重月显示规则回归
+//   * 回归 "-220 首月误显示拾壹月(应为冬月)" bug。
+//   * 古历区间(y∈[-721,-104])重月: 显示走正常农历名(十月/冬月), 但 is_spec 标记
+//     必须保留(供农历↔公历"重月"转换回环)。特殊名只保留 后九月/十三月。
+//   * CE 纪年因月建别名变更产生的连续同名月(如 240 年): 仍显示 "拾贰月"(SYmc),
+//     与上游 lunar.js 一致。
+// ─────────────────────────────────────────────
+struct YCScan {
+    int total = 0;
+    std::vector<SxwnlYearCalMonth> m;
+};
+YCScan yearCal(int year) {
+    YCScan s;
+    s.m.resize(16);
+    s.total = sxwnl_get_year_calendar(year, s.m.data(), 16);
+    if (s.total < 0) s.total = 0;
+    s.m.resize(s.total);
+    return s;
+}
+int countName(const YCScan &s, const char *name) {
+    int c = 0;
+    for (const auto &e : s.m)
+        if (std::string(e.month_name) == name) c++;
+    return c;
+}
+const SxwnlYearCalMonth *findName(const YCScan &s, const char *name) {
+    for (const auto &e : s.m)
+        if (std::string(e.month_name) == name) return &e;
+    return nullptr;
+}
+
+void testYearCalendar() {
+    std::printf("== Part F: 年历 API 月名/标记 ==\n");
+
+    // -220: 关键回归 —— 首月应"冬月"(非"拾壹月"), 且 is_spec 标记保留
+    {
+        YCScan s = yearCal(-220);
+        check(s.total > 0, "年历 -220 应有数据");
+        if (s.total > 0) {
+            std::string first = s.m[0].month_name;
+            std::printf("  -220 首月: %s (is_spec=%d) [期望 冬月, is_spec=1]\n",
+                        first.c_str(), s.m[0].is_spec);
+            check(first == "冬月", "年历 -220 首月应为 冬月(非 拾壹月)");
+            check(s.m[0].is_spec == 1, "年历 -220 首月应保留 is_spec 标记(转换回环)");
+        }
+        check(countName(s, "拾壹月") == 0, "年历 -220 不应出现 拾壹月");
+        check(countName(s, "拾月") == 0, "年历 -220 不应出现 拾月");
+        const SxwnlYearCalMonth *hj = findName(s, "后九月");
+        check(hj != nullptr && hj->is_leap == 1, "年历 -220 应含闰 后九月");
+    }
+
+    // -221: 两个"十月"(显示同名), 恰一个 is_spec; 含"冬月"; 不出现 拾/拾壹
+    {
+        YCScan s = yearCal(-221);
+        int shiCnt = countName(s, "十月");
+        int specShi = 0;
+        for (const auto &e : s.m)
+            if (std::string(e.month_name) == "十月" && e.is_spec) specShi++;
+        std::printf("  -221 十月出现 %d 次, 其中 is_spec %d 个 [期望 2 / 1]\n",
+                    shiCnt, specShi);
+        check(shiCnt == 2, "年历 -221 应有两个 十月");
+        check(specShi == 1, "年历 -221 两个十月中恰有一个 is_spec(转换回环)");
+        check(countName(s, "冬月") >= 1, "年历 -221 应含 冬月");
+        check(countName(s, "拾月") == 0 && countName(s, "拾壹月") == 0,
+              "年历 -221 不应出现 拾/拾壹月");
+    }
+
+    // 240 (CE): 连续同名月 → 保留 拾贰月(SYmc); 相邻 腊月 存在
+    {
+        YCScan s = yearCal(240);
+        const SxwnlYearCalMonth *sp = findName(s, "拾贰月");
+        std::printf("  240 含拾贰月: %s\n", sp ? "是" : "否");
+        check(sp != nullptr && sp->is_spec == 1, "年历 240 应含 拾贰月(is_spec=1)");
+        check(countName(s, "腊月") >= 1, "年历 240 应含 腊月");
+    }
+}
+
+// ─────────────────────────────────────────────
+// Part G: 重月端到端 (逐日月名/日名)
+//   * 古历秦汉"后十月/后冬月": 显示正常农历名(十月/冬月), 绝不出现 拾/拾壹。
+//   * CE 纪年连续十二月: 后一个显示 拾贰月。
+// ─────────────────────────────────────────────
+void testRepeatedMonths() {
+    std::printf("== Part G: 重月端到端 (古历正常名 / CE 拾贰月) ==\n");
+    struct DC { int y, m, d; const char *mon, *day; };
+    const std::vector<DC> cases = {
+        {-221, 10,  1, "冬月",   "初一"}, // 冬月(前一个)
+        {-221, 10, 31, "十月",   "初一"}, // 后一个十月 —— 正常名
+        {-221, 11, 29, "冬月",   "初一"}, // 后一个冬月 —— 正常名(回归 拾壹月 bug 的日级视角)
+        { 23,  12, 31, "拾贰月", "初一"}, // CE 后一个十二月
+        { 24,   1, 12, "拾贰月", "十三"}, // 同一 拾贰月 内
+    };
+    for (const auto &c : cases) {
+        std::string mn = monthName(c.y, c.m, c.d);
+        std::string dn = dayName(c.y, c.m, c.d);
+        std::printf("  %d-%02d-%02d -> %s%s (期望 %s%s)\n",
+                    c.y, c.m, c.d, mn.c_str(), dn.c_str(), c.mon, c.day);
+        check(mn == c.mon && dn == c.day,
+              std::string("重月锚点 ") + std::to_string(c.y) + "-"
+              + std::to_string(c.m) + "-" + std::to_string(c.d));
+    }
+}
+
 } // namespace
 
 int main() {
@@ -220,6 +324,8 @@ int main() {
     testYearParse();
     testShengXiao();
     testKnownDay();
+    testYearCalendar();
+    testRepeatedMonths();
 
     std::printf("\n=== 结果: PASS=%d FAIL=%d ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

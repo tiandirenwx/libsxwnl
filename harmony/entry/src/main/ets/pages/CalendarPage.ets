@@ -477,6 +477,9 @@ export struct CalendarPage {
         .margin({ left: 2, right: 2 })
 
       // 月输入
+      // 注意: TextInput 非下划线模式默认 padding 为 {left:16,right:16,...}(左右合计 32vp),
+      // 若沿用默认, width(40) 内容区仅剩 ~8vp, 两位数(10-12)会被裁切显示不全。
+      // 故显式收窄 padding 并适当加宽, 保证两位数完整显示与输入。
       TextInput({ text: this.monthInput })
         .type(InputType.Number)
         .maxLength(2)
@@ -485,7 +488,8 @@ export struct CalendarPage {
         .fontColor(AppColors.ON_PRIMARY)
         .backgroundColor(AppColors.PRIMARY_LIGHT + '60')
         .borderRadius(AppDimens.BORDER_RADIUS_SM)
-        .width(40)
+        .padding({ left: 4, right: 4, top: 0, bottom: 0 })
+        .width(48)
         .height(32)
         .onChange((v: string) => { this.monthInput = v })
         .onSubmit(() => { this.applyYearMonthInput() })

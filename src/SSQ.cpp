@@ -511,6 +511,9 @@ void SSQ::calcY(int jd) {
 			month_name_array_[i] = yueIdx[month_order_array_[i]];
 
             //-221年10月31日，是后一个十月;-221-11-29: 是后一个冬月
+            //  该标记用于"重月"的农历↔公历转换回环(isSpecNextMonth), 必须保留。
+            //  注意: 显示层(capi)对古历区间的重月只对"后九月/十三月"用特殊名,
+            //  其余重月仍显示正常农历月名(十月/冬月), 不使用 SYmc(拾/拾壹)。
             if (1640641 == Dm || 1640670 == Dm )
             {
                 specific_next_month_array_[i] = true;
