@@ -1,6 +1,7 @@
 #include "day.h"
 #include "eph.h"
 #include "sx_lang_zh.h"
+#include "lunar_month_name.h"
 #include <memory>
 #include <string>
 
@@ -19,6 +20,7 @@ Day::Day(int d,long double jf)
 
     this->lunar_total_days_ = 0;
     this->lunar_month_idx_ = -1;
+    this->lunar_month_style_ = 0;
     this->solar_month_ = 0;
     this->jieling_ = -2;
     this->lunar_lichun_year_ = 0;
@@ -99,6 +101,7 @@ void Day::checkLunarData()
     std::vector<int> vecYm = SSQPtr.getYm();
     std::vector<int> vecDx = SSQPtr.getDx();
     std::vector<bool> vecSpecMonth = SSQPtr.getSpecificLunarMonth();
+    std::vector<int> vecStyle = SSQPtr.getMonthDisplayStyle();
     int mk = int2((this->d0 - vecHS[0]) / 30);
     if (mk < 13 && vecHS[mk + 1] <= this->d0)
     {
@@ -126,6 +129,7 @@ void Day::checkLunarData()
         this->lunar_total_days_ = vecDx[mk];                    // 月大小
         this->is_lunar_leap_month_ = (leap != 0 && leap == mk); // 闰状况
         this->is_lunar_spec_month_ = vecSpecMonth[mk];          // 是否是特殊的重月
+        this->lunar_month_style_ = vecStyle[mk];                // 月名显示风格
     }
     else
     {
@@ -137,6 +141,7 @@ void Day::checkLunarData()
         std::vector<int> vecYesYm = ssq.getYm();
         std::vector<int> vecYesDx = ssq.getDx();
         std::vector<bool> vecYesSpecMonth = ssq.getSpecificLunarMonth();
+        std::vector<int> vecYesStyle = ssq.getMonthDisplayStyle();
         int ymk = int2((d - vecYesHS[0]) / 30);
         if (ymk < 13 && vecYesHS[ymk + 1] <= d)
         {
@@ -147,6 +152,7 @@ void Day::checkLunarData()
         this->lunar_total_days_ = vecYesDx[ymk];                       // 月大小
         this->is_lunar_leap_month_ = (yesleap != 0 && yesleap == ymk); // 闰状况
         this->is_lunar_spec_month_ = vecYesSpecMonth[ymk];             // 是否是特殊的重月
+        this->lunar_month_style_ = vecYesStyle[ymk];                   // 月名显示风格
         delete yesterday;
     }
 }
@@ -380,6 +386,12 @@ bool Day::isSpecNextMonth()
 {
     this->checkLunarData();
     return is_lunar_spec_month_;
+}
+
+int Day::getLunarMonthStyle()
+{
+    this->checkLunarData();
+    return this->lunar_month_style_;
 }
 
 int Day::getSolarYear()
@@ -1042,13 +1054,11 @@ festival::DayInfo Day::getFestivalInfo()
 // ═══════════════════════════════════════════════════════════════
 std::string Day::getLunarMonthName()
 {
-    int idx = (int)this->getLunarMonth() - 1;
-    if (idx < 0 || idx >= 12) return {};
-    std::string s;
-    if (this->isLunarLeap()) s += "闰";
-    s += Ymc[idx];
-    s += "月";
-    return s;
+    int nameNum = (int)this->getLunarMonth();
+    if (nameNum < 1 || nameNum > 12) return {};
+    // 古历"后九月/十三月"按农历年(春节界)判定, 与其它显示层一致
+    return sxwnl::lunarMonthName(this->getLunarYear(true), nameNum,
+                                 this->getLunarMonthStyle(), this->isLunarLeap());
 }
 
 std::string Day::getLunarDayName()

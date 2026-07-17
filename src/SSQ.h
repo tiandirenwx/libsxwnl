@@ -9,6 +9,27 @@ typedef enum
 	SType	 //朔
 } QSType;
 
+// 阴历月的"显示风格"。用于把 SSQ 排出的数字月序翻译成正确的显示名, 供
+// 八字/年历/月历/日详情各处统一使用(见 lunar_month_name.h)。
+//
+// 背景: SSQ 计算出的月序是数字(建子=11/冬, 建丑=12/腊, 建寅=正...), 但历史上
+// 帝王多次更改月建别名, 会出现"同一数字月名需要两种不同写法"的情形:
+//   * 连续同名月(如 CE 23/239 年底出现两个十二月): 后一个用 SYmc(拾贰)区分;
+//   * 689-701 武周历: 建子改称"正", 建寅改称"一"(而非"正"), 需要单独的"一"写法。
+// 这些只是"显示"层面的区别, 与农历↔公历互转所用的 is_spec(重月回环标记)彻底解耦,
+// 因此单独用本枚举承载, 不复用 is_spec, 避免显示误用 SYmc(如 690 年误显示"拾壹月")。
+enum LunarMonthNameStyle
+{
+	LUNAR_MONTH_NORMAL       = 0, // 正常: 用 Ymc[]  (正/二/…/十/冬/腊)
+	LUNAR_MONTH_SYMC         = 1, // 连续同名月: 用 SYmc[] (壹/贰/…/拾/拾壹/拾贰)
+	LUNAR_MONTH_YI           = 2, // 689-701 建寅: 显示"一"(区别于建子改称的"正")
+	// 古历年终置闰月(春秋/战国"十三月", 秦汉"后九月")。
+	// 单独用风格承载其身份, 使显示不依赖 leap 下标——因为 leap_month_==0 兼作
+	// "本年无闰"的哨兵值, 当置闰月恰好落在年历首月(下标 0, 如公元前 255 年)时,
+	// 旧的 (leap!=0 && i==leap) 判定会漏判, 导致"十三月"被误显示成"腊月"。
+	LUNAR_MONTH_ANCIENT_LEAP = 3,
+};
+
 
 class SSQ
 {
@@ -40,6 +61,8 @@ public:
 	std::vector<int> getYueName() const;
     std::vector<int> getDx() const;
     std::vector<bool> getSpecificLunarMonth() const;
+    //各月的显示风格(LunarMonthNameStyle), 供显示层统一翻译月名
+    std::vector<int> getMonthDisplayStyle() const;
 	std::vector<int> getBDNS() const;
     std::vector<int> getZQPe() const;
     int getLeap() const;
@@ -60,6 +83,7 @@ private:
 	std::vector<int> month_name_array_; //月名
 	std::vector<int> month_daxiao_array_; //各月大小
     std::vector<bool> specific_next_month_array_; //特殊月序是下一个月
+    std::vector<int> month_display_style_; //各月显示风格(LunarMonthNameStyle)
 	std::vector<int> bd_ns_array_; //公元前19年7闰法年首，年尾，闰月情况
 	int leap_month_ = 0;
 

@@ -7,6 +7,7 @@
 #include "eph.h"
 #include "lunar_ob.h"
 #include "sx_lang_zh.h"
+#include "lunar_month_name.h"
 
 BaziBase::BaziBase(const SBaziInputPara &input)
 {
@@ -674,45 +675,9 @@ std::tuple<std::string, std::string, std::string> BaziBase::getLunarInfo() const
     std::string lyGan = Gan[mSLunarDay_.lyGanIdx];
     std::string lyZhi = Zhi[mSLunarDay_.lyZhiIdx];
 
-    // 月信息
-    bool bdLeapYear = false;
-    std::string strTemp1, strTemp2, lmMc;
-    if (mSLunarDay_.isLeap)
-    {
-        if (solarYear >= -721 && solarYear < -220)
-        {
-            strTemp1 = BDLeapYueName[0];
-            bdLeapYear = true;
-        }
-        else if (solarYear >= -220 && solarYear <= -104)
-        {
-            strTemp1 = BDLeapYueName[1];
-            bdLeapYear = true;
-        }
-        else
-        {
-            strTemp1 = "闰";
-        }
-    }
-    if (bdLeapYear)
-    {
-        lmMc = strTemp1;
-    }
-    else
-    {
-        // 古历区间(y∈[-721,-104])的重月(isNext)只作转换回环标记, 显示仍用正常农历名;
-        // 特殊名只保留"后九月/十三月"(上面 bdLeapYear 分支处理)。其余年代重月才用 SYmc(拾贰月)。
-        const bool ancient = (solarYear >= -721 && solarYear <= -104);
-        if (mSLunarDay_.isNext && !ancient)
-        {
-            strTemp2 = SYmc[mSLunarDay_.monthIdx];
-        }
-        else
-        {
-            strTemp2 = Ymc[mSLunarDay_.monthIdx];
-        }
-        lmMc = strTemp1 + strTemp2 + "月";
-    }
+    // 月信息 —— 统一走 sxwnl::lunarMonthName(见 lunar_month_name.h), 与年历/月历/日详情一致
+    std::string lmMc = sxwnl::lunarMonthName(solarYear, mSLunarDay_.monthIdx + 1,
+                                             mSLunarDay_.monthStyle, mSLunarDay_.isLeap);
 
     // 农历日信息
     std::string ldMc = std::string(Rmc[mSLunarDay_.dayIdx]) + "日";

@@ -39,41 +39,8 @@ GZ getGZ(std::string tgStr, std::string dzStr)
 
 std::string printLunarMonth(Day &day)
 {
-    std::string strTemp1, strTemp2;
-    int year = day.getSolarYear();
-    bool bdLeapYear = false;
-    if (day.isLunarLeap())
-    {
-        if (year >= -721 && year < -220)
-        {
-            strTemp1 = BDLeapYueName[0];
-            bdLeapYear = true;
-        }
-        else if (year >= -220 && year <= -104)
-        {
-            strTemp1 = BDLeapYueName[1];
-            bdLeapYear = true;
-        }
-        else
-        {
-            strTemp1 = "闰";
-        }
-    }
-    if (bdLeapYear)
-    {
-        return strTemp1;
-    }
-
-    if (day.isSpecNextMonth())
-    {
-        strTemp2 = SYmc[day.getLunarMonth() - 1];
-    }
-    else
-    {
-        strTemp2 = Ymc[day.getLunarMonth() - 1];
-    }
-
-    return strTemp1 + strTemp2 + "月";
+    // 统一走库内的单一事实源(Day::getLunarMonthName -> sxwnl::lunarMonthName)
+    return day.getLunarMonthName();
 }
 
 void printDay(Day &day)

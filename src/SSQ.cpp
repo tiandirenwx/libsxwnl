@@ -394,11 +394,13 @@ void SSQ::calcY(int jd) {
 	month_order_array_.clear();
 	month_name_array_.clear();
     specific_next_month_array_.clear();
+    month_display_style_.clear();
 	for (i = 0; i < 14; i++) {
 		month_daxiao_array_.push_back(sun_moon_hesuo_array_[i + 1] - sun_moon_hesuo_array_[i] ); //月大小
 		month_order_array_.push_back(i);  //月序初始化
 		month_name_array_.push_back(0);
         specific_next_month_array_.push_back(false);
+        month_display_style_.push_back(LUNAR_MONTH_NORMAL);
 	}
 
 
@@ -507,6 +509,10 @@ void SSQ::calcY(int jd) {
             {
                 month_order_array_[i] = ns[nn + 3]; //闰月
                 leap_month_ = i;
+                //  年终置闰月(十三月/后九月)。用显示风格承载其身份, 避免依赖 leap 下标:
+                //  leap_month_==0 兼作"本年无闰"哨兵, 当置闰月落在年历首月(如公元前255年)
+                //  时会被漏判, 导致"十三月"误显示为"腊月"。见 lunar_month_name.h。
+                month_display_style_[i] = LUNAR_MONTH_ANCIENT_LEAP;
             }
 			month_name_array_[i] = yueIdx[month_order_array_[i]];
 
@@ -570,6 +576,10 @@ void SSQ::calcY(int jd) {
             {
                 mc = 12; //689.12.18至700.11.15 建子为正月,建寅为一月,其它不变
                 specific_next_month_array_[i] = true;
+                //  建寅在此期间显示为"一月"(区别于建子改称的"正月"), 与上游 lunar.js
+                //  (mc='一') 一致。用独立的显示风格承载, 不再复用 is_spec, 否则显示层
+                //  会误把它当作连续同名月而输出 SYmc(壹/拾壹月)。
+                month_display_style_[i] = LUNAR_MONTH_YI;
             }
         }
 
@@ -588,6 +598,8 @@ void SSQ::calcY(int jd) {
             //后一个十二月
             mc = 1;
             specific_next_month_array_[i] = true;
+            //  连续两个十二月, 后一个用 SYmc(拾贰月)与前一个(腊月)区分。
+            month_display_style_[i] = LUNAR_MONTH_SYMC;
         }
 	
 
@@ -640,6 +652,12 @@ std::vector<int> SSQ::getDx() const
 std::vector<bool> SSQ::getSpecificLunarMonth() const
 {
     return specific_next_month_array_;
+}
+
+//各月的显示风格(LunarMonthNameStyle), 供显示层统一翻译月名
+std::vector<int> SSQ::getMonthDisplayStyle() const
+{
+    return month_display_style_;
 }
 
 std::vector<int> SSQ::getBDNS() const

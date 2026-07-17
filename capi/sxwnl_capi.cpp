@@ -17,6 +17,7 @@
 #include "star_catalog.h"
 #include "month_calendar.h"
 #include "lunar_ob.h"
+#include "lunar_month_name.h"
 #include "eph_szj.h"
 #include "almanac.h"
 
@@ -56,31 +57,11 @@ static std::string gz_str(GZ gz) {
     return std::string(Gan[gz.tg]) + Zhi[gz.dz];
 }
 
-// 生成阴历月名:
-//   古历年终置闰月(仅 isLeap 的那个月): 春秋/战国"十三月"(y∈[-721,-220)),
-//   秦汉"后九月"(y∈[-220,-104]) —— 一年至多一个, 不能对全年套用
-//   重月(isSpec, 非闰): 用 SYmc[](壹/贰/…) 与正常同名月区分
-//   其余普通月/普通闰月: "闰"+Ymc[]
-// month 为月号 (1-12, 与 Day::getLunarMonth() 一致)
-//
-// 重月(isSpec)显示规则:
-//   · 古历区间(y∈[-721,-104]): 重月(如"后一个十月/冬月")只作转换回环标记, 显示仍用
-//     正常农历名(十月/冬月); 该区间真正需要特殊名的只有年终置闰的"后九月/十三月",
-//     已在上面 isLeap 分支处理。此处不能用 SYmc, 否则年历会误显示"拾/拾壹月"。
-//   · 其余年代(如 CE 23/239 年连续两个十二月): 用 SYmc[](拾贰月)区分, 与上游 lunar.js 一致。
-static std::string lunar_month_str(int year, int month, bool isLeap, bool isSpec) {
-    if (isLeap) {
-        if (year >= -721 && year < -220) return std::string(BDLeapYueName[0]) + "月";
-        if (year >= -220 && year <= -104) return std::string(BDLeapYueName[1]) + "月";
-    }
-    const bool ancient = (year >= -721 && year <= -104);
-    std::string prefix = isLeap ? "闰" : "";
-    std::string base;
-    if (month >= 1 && month <= 12)
-        base = (isSpec && !ancient) ? SYmc[month - 1] : Ymc[month - 1];
-    else
-        base = std::to_string(month);
-    return prefix + base + "月";
+// 生成阴历月名 —— 统一委托 sxwnl::lunarMonthName(见 src/lunar_month_name.h),
+// 与年历/月历/八字各处共用同一份逻辑。month 为月号(1-12, 与 Day::getLunarMonth() 一致),
+// style 为 LunarMonthNameStyle(由 Day::getLunarMonthStyle() 给出)。
+static std::string lunar_month_str(int year, int month, bool isLeap, int style) {
+    return sxwnl::lunarMonthName(year, month, style, isLeap);
 }
 
 static std::string lunar_day_str(int day) {
@@ -116,7 +97,7 @@ static void fill_day_info(Day *d, SxwnlDayInfo *out) {
     safe_copy(out->day_gz,   sizeof(out->day_gz),   gz_str(dGZ));
     safe_copy(out->lunar_month_name, sizeof(out->lunar_month_name),
               lunar_month_str(out->lunar_year, out->lunar_month,
-                              out->is_leap_month, d->isSpecNextMonth()));
+                              out->is_leap_month, d->getLunarMonthStyle()));
     safe_copy(out->lunar_day_name, sizeof(out->lunar_day_name),
               lunar_day_str(out->lunar_day));
     safe_copy(out->sheng_xiao, sizeof(out->sheng_xiao), ShengXiao[yGZ.dz]);
@@ -520,6 +501,7 @@ static void enum_lunar_window(int year, std::vector<SxwnlLunarMonth> &v) {
     std::vector<int> vecHS = ssq.getHS();
     std::vector<bool> vecSpec = ssq.getSpecificLunarMonth();
     std::vector<int> vecYueName = ssq.getYueName();
+    std::vector<int> vecStyle = ssq.getMonthDisplayStyle();
     int leap = ssq.getLeap();
 
     if (vecZQ.size() <= 24) return;  // 需要 vecZQ[24] 作为窗口上界
@@ -527,29 +509,14 @@ static void enum_lunar_window(int year, std::vector<SxwnlLunarMonth> &v) {
     for (int i = 0; i < 14; i++) {
         if ((int)vecHS.size() <= i + 1 || vecHS[i + 1] > vecZQ[24]) break;
         // 并行数组边界保护
-        if (i >= (int)vecSpec.size() || i >= (int)vecYueName.size()) break;
+        if (i >= (int)vecSpec.size() || i >= (int)vecYueName.size() ||
+            i >= (int)vecStyle.size()) break;
 
         bool isLeap = (leap && i == leap);
-        bool bd = false;
-        std::string t1, name;
-        // 古历年终置闰月(仅这个闰月)按年份取"十三月/后九月", 一年至多一个
-        if (isLeap) {
-            if (year >= -721 && year < -220) { t1 = BDLeapYueName[0]; bd = true; }
-            else if (year >= -220 && year <= -104) { t1 = BDLeapYueName[1]; bd = true; }
-            else t1 = "闰";
-        }
         int yn = vecYueName[i];
-        if (bd) {
-            name = t1 + "月";   // 后九月 / 十三月
-        } else {
-            // 古历区间(y∈[-721,-104])的重月只作转换回环标记(is_spec), 显示用正常农历名;
-            // 特殊名只保留"后九月/十三月"(上面 bd 分支)。其余年代重月才用 SYmc(拾贰月)。
-            const bool ancient = (year >= -721 && year <= -104);
-            std::string t2 = (yn >= 1 && yn <= 12)
-                ? ((vecSpec[i] && !ancient) ? SYmc[yn - 1] : Ymc[yn - 1])
-                : std::to_string(yn);
-            name = t1 + t2 + "月";
-        }
+        // 统一走 sxwnl::lunarMonthName: 后九月/十三月(闰)、连续同名月(SYmc)、
+        // 689-701 建寅(一月) 全部由 (year, yn, style, isLeap) 决定
+        std::string name = sxwnl::lunarMonthName(year, yn, vecStyle[i], isLeap);
 
         SxwnlLunarMonth e{};
         e.month = yn;
@@ -636,6 +603,7 @@ int sxwnl_get_year_calendar(int year, SxwnlYearCalMonth *out, int max_count) {
         const auto Ym  = ssq.getYm();          // 14 个月建序号 (0=子/冬月, 1=丑/腊月, 2=寅/正月, ..., 11=亥/十月)
         const auto Dx  = ssq.getDx();          // 14 个月大小
         const auto Spc = ssq.getSpecificLunarMonth();
+        const auto Sty = ssq.getMonthDisplayStyle(); // 14 个月显示风格
         const int  leap = ssq.getLeap();
 
         if (HS.size() < 15 || ZQ.size() < 25 || Pe.size() < 2)
@@ -657,26 +625,10 @@ int sxwnl_get_year_calendar(int year, SxwnlYearCalMonth *out, int max_count) {
             int ymi = ((mc % 12) + 10) % 12;
             bool isLeap = (leap && i == leap);
             bool isSpec = (i < (int)Spc.size()) ? Spc[i] : false;
-            bool bd = false;
-            std::string monthName;
-            if (isLeap) {
-                if (year >= -721 && year < -220) {
-                    monthName = std::string(BDLeapYueName[0]) + "月";
-                    bd = true;
-                } else if (year >= -220 && year <= -104) {
-                    monthName = std::string(BDLeapYueName[1]) + "月";
-                    bd = true;
-                }
-            }
-            if (!bd) {
-                // 古历区间(y∈[-721,-104])的重月只用于转换回环标记, 显示仍走正常农历名;
-                // 特殊名只保留"后九月/十三月"(上面 bd 分支已处理)。其余年代重月才用 SYmc(拾贰月)。
-                const bool ancient = (year >= -721 && year <= -104);
-                std::string t2 = (ymi >= 0 && ymi < 12)
-                    ? ((isSpec && !ancient) ? SYmc[ymi] : Ymc[ymi])
-                    : std::to_string(ymi);
-                monthName = (isLeap ? "闰" : "") + t2 + "月";
-            }
+            int style = (i < (int)Sty.size()) ? Sty[i] : LUNAR_MONTH_NORMAL;
+            // 统一走 sxwnl::lunarMonthName: 后九月/十三月(闰)、连续同名月(SYmc)、
+            // 689-701 建寅(一月) 全部由 (year, ymi+1, style, isLeap) 决定
+            std::string monthName = sxwnl::lunarMonthName(year, ymi + 1, style, isLeap);
 
             m.month_idx = ymi;
             m.is_leap   = isLeap ? 1 : 0;

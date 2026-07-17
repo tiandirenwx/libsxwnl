@@ -63,6 +63,7 @@ namespace sxtwl
 			lunarRet.dayIdx = dayPtr->getLunarDay() - 1;
 			lunarRet.isLeap = dayPtr->isLunarLeap();
 			lunarRet.isNext = dayPtr->isSpecNextMonth();
+			lunarRet.monthStyle = dayPtr->getLunarMonthStyle();
 			// 干支，以立春为界
 			lunarRet.lyGanIdx = dayPtr->getYearGZ(isLunarNewYear).tg;
 			lunarRet.lyZhiIdx = dayPtr->getYearGZ(isLunarNewYear).dz;
@@ -91,6 +92,7 @@ namespace sxtwl
 			lunarRet.dayIdx = dayPtr->getLunarDay() - 1;
 			lunarRet.isLeap = dayPtr->isLunarLeap();
 			lunarRet.isNext = dayPtr->isSpecNextMonth();
+			lunarRet.monthStyle = dayPtr->getLunarMonthStyle();
 			// 干支，以立春为界
 			lunarRet.lyGanIdx = dayPtr->getYearGZ(false).tg;
 			lunarRet.lyZhiIdx = dayPtr->getYearGZ(false).dz;

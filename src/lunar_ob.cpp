@@ -1,5 +1,6 @@
 #include "lunar_ob.h"
 #include "util.h"
+#include "lunar_month_name.h"
 
 void LunarYear::init()
 {
@@ -59,6 +60,7 @@ std::string LunarYear::getNianLiStr()
     std::vector<int> vecPe = ssq.getZQPe();
     std::vector<bool> vecSpec = ssq.getSpecificLunarMonth();
     std::vector<int> vecYueName = ssq.getYueName();
+    std::vector<int> vecStyle = ssq.getMonthDisplayStyle();
     int leap = ssq.getLeap();
 
     for (i = 0; i < 14; i++)
@@ -68,50 +70,10 @@ std::string LunarYear::getNianLiStr()
             break; // 已包含下一年的冬至
         }
 
-        bool bdLeapYear = false;
-        std::string strTemp1, strTemp2;
-        if (leap && i == leap)
-        {
-            if (y >= -721 && y < -220)
-            {
-                strTemp1 = BDLeapYueName[0];
-                bdLeapYear = true;
-            }
-            else if (y >= -220 && y <= -104)
-            {
-                strTemp1 = BDLeapYueName[1];
-                bdLeapYear = true;
-            }
-            else
-            {
-                strTemp1 = "闰";
-            }
-        }
-
-        if (bdLeapYear)
-        {
-            s1 = strTemp1;
-        }
-        else
-        {
-            // 古历区间(y∈[-721,-104])重月只作转换回环标记, 显示用正常农历名;
-            // 特殊名只保留"后九月/十三月"(上面 bdLeapYear 分支)。其余年代重月才用 SYmc。
-            const bool ancient = (y >= -721 && y <= -104);
-            if (vecSpec[i] && !ancient)
-            {
-                strTemp2 = SYmc[vecYueName[i] - 1];
-            }
-            else
-            {
-                strTemp2 = Ymc[vecYueName[i] - 1];
-            }
-            s1 = strTemp1 + strTemp2;
-        }
-
-        if ((s1.length() < 6 && !bdLeapYear) || (!bdLeapYear && (s1.length() < 9) &&(leap && i == leap)))
-        {
-            s1 += "月";
-        }
+        // 月名统一走 sxwnl::lunarMonthName(见 lunar_month_name.h): 后九月/十三月(闰)、
+        // 连续同名月(SYmc)、689-701 建寅(一月) 全部由 (y, yueName, style, isLeap) 决定
+        bool isLeap = (leap && i == leap);
+        s1 = sxwnl::lunarMonthName(y, vecYueName[i], vecStyle[i], isLeap);
 
         s1 += vecDx[i] > 29 ? "大" : "小";
         s1 += " " + JD::JD2str(vecHS[i] + J2000).substr(6, 5);

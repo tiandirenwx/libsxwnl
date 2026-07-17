@@ -13,6 +13,7 @@ struct SLunarDay
 	int lyZhiIdx;
 	bool isLeap;
 	bool isNext;
+	int monthStyle = 0; // 阴历月显示风格(LunarMonthNameStyle)
 };
 
 struct SSolarDay

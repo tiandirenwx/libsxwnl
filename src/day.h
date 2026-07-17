@@ -43,6 +43,7 @@ private:
     int lunar_total_days_;      //该阴历月的总天数
     bool is_lunar_leap_month_;  //是不是阴历的润月
     bool is_lunar_spec_month_;   //是不是农历的下一个重月
+    int lunar_month_style_;      //阴历月显示风格(LunarMonthNameStyle)
     int cur_dz_;  
     int cur_xz_;
     int cur_lq_;
@@ -110,6 +111,8 @@ public:
 	GZ getHourGZ(uint8_t hour, bool isZaoWanZiShi = true);
     bool isLunarLeap();
     bool isSpecNextMonth();
+    //阴历月显示风格(LunarMonthNameStyle), 供显示层统一翻译月名
+    int getLunarMonthStyle();
     uint8_t getLunarDay12Jian();
 
     //获取公历时间
