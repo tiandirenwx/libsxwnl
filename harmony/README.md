@@ -17,7 +17,7 @@ N-API Bridge (napi_*.cpp)
     ↓
 C API (sxwnl_capi.h) ← 三端共享
     ↓
-libsxwnl (C++17 核心)
+libsxwnl (C++20 核心)
 ```
 
 ## 构建

@@ -652,8 +652,8 @@ Vector3 pluto_coord(long double t)
 
 	for (int i = 0; i < 9; i++)
 	{
-		const long double *ob = XL0Pluto[i];
-		int N = sizeof(XL0Pluto[i]) / sizeof(long double);
+		const long double *ob = XL0Pluto[i].data;
+		int N = XL0Pluto[i].n; // 项数与数据同源绑定 (对应 JS ob.length)
 		long double v = 0;
 		for (int j = 0; j < N; j += 3)
 		{

@@ -45,8 +45,8 @@ object EclipseShareUtil {
         return file
     }
 
-    /** 调起系统分享 (图片). */
-    fun shareImage(context: Context, file: File) {
+    /** 调起系统分享 (图片). [title] 为系统选择器标题. */
+    fun shareImage(context: Context, file: File, title: String = "分享图片") {
         val uri: Uri = FileProvider.getUriForFile(
             context, "${context.packageName}.fileprovider", file)
         val intent = Intent(Intent.ACTION_SEND).apply {
@@ -54,7 +54,7 @@ object EclipseShareUtil {
             putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        context.startActivity(Intent.createChooser(intent, "分享日月食截图")
+        context.startActivity(Intent.createChooser(intent, title)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 

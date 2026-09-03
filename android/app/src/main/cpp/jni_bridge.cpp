@@ -97,6 +97,7 @@ static jobject newDayInfoObj(JNIEnv *env, const SxwnlDayInfo &d) {
     setInt(env, cls, obj, "dayZhi",   d.day_zhi);
 
     setInt(env, cls, obj, "jieQi",        d.jie_qi);
+    setInt(env, cls, obj, "lipuJieQi",    d.lipu_jie_qi);
     setInt(env, cls, obj, "yueXiang",     d.yue_xiang);
     setInt(env, cls, obj, "constellation", d.constellation);
     setInt(env, cls, obj, "jian12",        d.jian12);
@@ -108,6 +109,7 @@ static jobject newDayInfoObj(JNIEnv *env, const SxwnlDayInfo &d) {
     setStr(env, cls, obj, "lunarDayName",      d.lunar_day_name);
     setStr(env, cls, obj, "jieQiName",         d.jie_qi_name);
     setStr(env, cls, obj, "jieQiTime",         d.jie_qi_time);
+    setStr(env, cls, obj, "lipuJieQiName",     d.lipu_jie_qi_name);
     setStr(env, cls, obj, "shengXiao",         d.sheng_xiao);
     setStr(env, cls, obj, "constellationName", d.constellation_name);
     setStr(env, cls, obj, "weekName",          d.week_name);
@@ -303,6 +305,8 @@ Java_com_sxwnl_calendar_bridge_SxwnlNative_getYearCalendar(
             setStr(env, jqCls, jo, "time", j.time);
             setInt(env, jqCls, jo, "dayOffset", j.day_offset);
             setStr(env, jqCls, jo, "dayName", j.day_name);
+            setInt(env, jqCls, jo, "accMonth", j.acc_month);
+            setInt(env, jqCls, jo, "accDay", j.acc_day);
             env->SetObjectArrayElement(jqArr, k, jo);
             env->DeleteLocalRef(jo);
         }

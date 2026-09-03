@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.22)
 project(sxwnl_jni)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 # 项目根目录：android/app/src/main/cpp -> libsxwnl/  (cpp -> main -> src -> app -> android -> libsxwnl)
 set(PROJECT_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../../../../..)

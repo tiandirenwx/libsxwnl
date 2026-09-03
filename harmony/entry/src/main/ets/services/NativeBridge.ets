@@ -26,6 +26,10 @@ export interface DayInfo {
   lunarDayName: string
   jieQiName: string
   jieQiTime: string
+  // 历谱口径节气(整日表+QB, 对齐 sxwnl 网页版): 日历格子标签建议用此值,
+  // 古代(1645年前)与天文口径 jieQi 可能差 1 天; 精确时刻仍用 jieQiTime。
+  lipuJieQi: number
+  lipuJieQiName: string
   shengXiao: string
   constellationName: string
   weekName: string
@@ -66,9 +70,11 @@ export interface YearCalJieQi {
   gz: string           // 节气日干支
   solarMonth: number
   solarDay: number
-  time: string         // "HH:MM:SS" 精确时刻
+  time: string         // "HH:MM:SS" 精确交气时刻(天文定气)
   dayOffset: number    // 距本月初一的天数
   dayName: string      // 月内日名 (初一/十五...)
+  accMonth: number     // 精确交气公历月 (古代可能与 solarMonth 差1天)
+  accDay: number       // 精确交气公历日
 }
 
 export interface YearCalMonth {

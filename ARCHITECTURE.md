@@ -32,7 +32,7 @@
 │              └──────────────────────────────┘                    │
 │                                                                  │
 ├──────────────────────────────────────────────────────────────────┤
-│                    libsxwnl C++17 核心                            │
+│                    libsxwnl C++20 核心                            │
 │                                                                  │
 │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌──────────────┐       │
 │  │  Day    │  │BaziBase │  │  SSQ    │  │ Eph/XL 星历  │        │
@@ -68,7 +68,7 @@
 
 ```
 libsxwnl/
-├── src/                    # C++17 核心库（原有）
+├── src/                    # C++20 核心库（原有）
 ├── capi/                   # 公共 C API 封装层
 │   ├── sxwnl_capi.h       # C 头文件（三端共用）
 │   ├── sxwnl_capi.cpp     # 实现
@@ -120,7 +120,7 @@ libsxwnl/
 
 | 平台 | 工具链 | 主要构建命令 |
 |---|---|---|
-| C++ 核心 | CMake 3.22+, Clang/GCC C++17 | `cmake -B build && cmake --build build` |
+| C++ 核心 | CMake 3.22+, Clang/GCC C++20 | `cmake -B build && cmake --build build` |
 | Android | JDK 17, Gradle 8.5, AGP 8.2.2, NDK 25.1.8937393, CMake 3.22.1 | `cd android && ./gradlew :app:assembleDebug` |
 | iOS | Xcode 15+, iOS 16+ | 打开 Xcode 工程，⌘R |
 | 鸿蒙 | DevEco Studio | 通过 IDE 构建 |

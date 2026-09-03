@@ -1,6 +1,6 @@
 # 寿星万年历 — iOS / iPadOS 版
 
-基于 `libsxwnl` C++17 核心库的 Apple 平台万年历应用，使用 **SwiftUI**。
+基于 `libsxwnl` C++20 核心库的 Apple 平台万年历应用，使用 **SwiftUI**。
 
 ## 功能（与鸿蒙端一致）
 
@@ -21,7 +21,7 @@ SxwnlBridge.swift  ←  Bridging Header (sxwnl_capi.h)
     ↓
 公共 C API (capi/sxwnl_capi.{h,cpp})  ← 三端共享
     ↓
-libsxwnl C++17 核心 (src/*.cpp)
+libsxwnl C++20 核心 (src/*.cpp)
 ```
 
 ## 构建
@@ -33,7 +33,7 @@ libsxwnl C++17 核心 (src/*.cpp)
 | Xcode | 15+ |
 | iOS Deployment Target | 16.0+ |
 | Swift | 5.9+ |
-| C++ Dialect | C++17 |
+| C++ Dialect | C++20 |
 
 ### Xcode 工程
 
@@ -47,7 +47,7 @@ libsxwnl C++17 核心 (src/*.cpp)
 |---|---|
 | Objective-C Bridging Header | `SxwnlCalendar/Bridge/SxwnlCalendar-Bridging-Header.h` |
 | Header Search Paths | `$(PROJECT_DIR)/../../capi` `$(PROJECT_DIR)/../../src` |
-| C++ Language Dialect | GNU++17 |
+| C++ Language Dialect | C++20 |
 | C++ and Objective-C Interop | C++ / Objective-C++ |
 | Targeted Device Family | 1,2 (iPhone, iPad) |
 

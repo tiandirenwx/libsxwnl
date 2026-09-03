@@ -44,6 +44,9 @@ fun YearCalendarScreen() {
     var yearInput by remember { mutableStateOf(YearUtil.astroYearToStr(todayYear)) }
     var months by remember { mutableStateOf(emptyList<YearCalMonth>()) }
     var loading by remember { mutableStateOf(false) }
+    // 农历纪年(干支 + 生肖) — 与月历顶部一致, 取该农历年"正月初一"那天的年柱
+    var yearGZ by remember { mutableStateOf("") }
+    var shengXiao by remember { mutableStateOf("") }
 
     fun reload() {
         loading = true
@@ -51,6 +54,17 @@ fun YearCalendarScreen() {
             val data = CalendarRepository.getYearCalendar(currentYear)
             months = data
             yearInput = YearUtil.astroYearToStr(currentYear)
+            // 正月(monthIdx==0 且非闰)初一确定农历年干支; 900 年正月初一(02-04)
+            // 在立春之后, 两种纪年口径一致, 取此日的 yearGZ/shengXiao 最稳妥.
+            val zhengYue = data.firstOrNull { it.monthIdx == 0 && !it.isLeap }
+            if (zhengYue != null) {
+                val di = CalendarRepository.getDayInfo(
+                    zhengYue.solarYear, zhengYue.solarMonth, zhengYue.solarDay)
+                yearGZ = di?.yearGZ ?: ""
+                shengXiao = di?.shengXiao ?: ""
+            } else {
+                yearGZ = ""; shengXiao = ""
+            }
             loading = false
         }
     }
@@ -78,7 +92,7 @@ fun YearCalendarScreen() {
     LaunchedEffect(Unit) { reload() }
 
     Column(Modifier.fillMaxSize().background(Background)) {
-        YearHeaderSection(currentYear)
+        YearHeaderSection(currentYear, yearGZ, shengXiao)
         YearNavSection(
             yearInput = yearInput, onYearChange = { yearInput = it },
             onMinus10 = { shiftYear(-10) },
@@ -131,7 +145,7 @@ fun YearCalendarScreen() {
 // ─── Header ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun YearHeaderSection(year: Int) {
+private fun YearHeaderSection(year: Int, yearGZ: String, shengXiao: String) {
     Box(
         Modifier
             .fillMaxWidth()
@@ -139,17 +153,33 @@ private fun YearHeaderSection(year: Int) {
             .padding(horizontal = Dimens.paddingLg, vertical = Dimens.paddingSm)
             .padding(top = Dimens.paddingMd)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 "${YearUtil.astroYearToStr(year)} 年",
                 fontSize = Dimens.fontTitle, fontWeight = FontWeight.Bold,
                 color = OnPrimary
             )
-            Text(
-                "农历年视图 (按朔月排列)",
-                fontSize = Dimens.fontSmall,
-                color = OnPrimary.copy(alpha = 0.7f)
-            )
+            Spacer(Modifier.weight(1f))
+            // 农历干支纪年 + 生肖 (与月历顶部风格一致)
+            if (yearGZ.isNotEmpty()) {
+                Text(
+                    "农历", fontSize = Dimens.fontCaption,
+                    color = OnPrimary.copy(alpha = 0.7f)
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    "${yearGZ}年",
+                    fontSize = Dimens.fontCaption, fontWeight = FontWeight.Medium,
+                    color = Accent
+                )
+                if (shengXiao.isNotEmpty()) {
+                    Text(
+                        " · 生肖$shengXiao",
+                        fontSize = Dimens.fontCaption,
+                        color = OnPrimary.copy(alpha = 0.85f)
+                    )
+                }
+            }
         }
     }
 }
@@ -194,7 +224,8 @@ private fun YearNavSection(
                     textAlign = TextAlign.Center
                 ),
                 singleLine = true,
-                modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
+                // 只占满宽度、不撑满高度 → 交给外层 Box 垂直居中, 避免文字上浮/顶对齐
+                modifier = Modifier.fillMaxWidth().wrapContentHeight().padding(horizontal = 4.dp),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { onApply() }),
                 cursorBrush = SolidColor(OnPrimary)
@@ -394,10 +425,15 @@ private fun JieQiRow(jq: YearCalJieQi, m: YearCalMonth) {
 private fun formatShuoDate(m: YearCalMonth): String =
     "${YearUtil.astroYearToStr(m.solarYear)}-${pad2(m.solarMonth)}-${pad2(m.solarDay)}"
 
+// 参考 sxwnl nianLiHTML "历谱MM-DD(精确日 时:分:秒)":
+//   现代(定气历): 精确日 == 历谱日, 只显示 "MM-DD HH:MM:SS";
+//   古代(1645前平气): 精确交气日常与历谱日差1天, 括号内补显精确公历日期+时刻.
 private fun formatJieQiDate(jq: YearCalJieQi, m: YearCalMonth): String {
-    val date = "${pad2(jq.solarMonth)}-${pad2(jq.solarDay)}"
-    return if (jq.time.isNotEmpty()) "$date ${jq.time}"
-    else "${YearUtil.astroYearToStr(m.solarYear)}-$date"
+    val lipuDate = "${pad2(jq.solarMonth)}-${pad2(jq.solarDay)}"
+    if (jq.time.isEmpty()) return "${YearUtil.astroYearToStr(m.solarYear)}-$lipuDate"
+    val sameDay = jq.accMonth == jq.solarMonth && jq.accDay == jq.solarDay
+    return if (sameDay) "$lipuDate ${jq.time}"
+    else "$lipuDate (${pad2(jq.accMonth)}-${pad2(jq.accDay)} ${jq.time})"
 }
 
 private fun pad2(n: Int): String = if (n < 10) "0$n" else "$n"

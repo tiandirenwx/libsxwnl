@@ -1,5 +1,5 @@
 // Quick build verification for sxwnl_capi
-// Build: g++ -std=c++17 -I../src -I. test_capi.cpp sxwnl_capi.cpp ../src/*.cpp -o test_capi
+// Build: g++ -std=c++20 -I../src -I. test_capi.cpp sxwnl_capi.cpp ../src/*.cpp -o test_capi
 #include "sxwnl_capi.h"
 #include <cstdio>
 #include <cstring>

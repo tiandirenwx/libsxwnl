@@ -1,7 +1,7 @@
 // 简易验证: 对若干样本日, 输出神煞/宜忌/吉时/用事
 //
 // 用法 (在 repo 根目录):
-//   c++ -std=c++17 -Isrc -Lbuild/lib scripts/verify_almanac.cpp -lsxwnl -o /tmp/verify_alm
+//   c++ -std=c++20 -Isrc -Lbuild/lib scripts/verify_almanac.cpp -lsxwnl -o /tmp/verify_alm
 //   /tmp/verify_alm
 #include "sxwnl_capi.h"
 #include <cstdio>

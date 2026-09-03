@@ -16,7 +16,9 @@ target_include_directories(sxwnl_capi PUBLIC
 )
 
 set_target_properties(sxwnl_capi PROPERTIES
-    CXX_STANDARD 17
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
     C_STANDARD 11
     POSITION_INDEPENDENT_CODE ON
 )

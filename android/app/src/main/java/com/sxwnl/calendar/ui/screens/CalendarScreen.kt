@@ -123,8 +123,8 @@ fun CalendarScreen() {
                 }
                 moon += MonthEvent(d.solarDay, extractTime(d.yueXiangTime), label)
             }
-            if (d.jieQiName.isNotEmpty()) {
-                jq += MonthEvent(d.solarDay, extractTime(d.jieQiTime), d.jieQiName)
+            if (d.lipuJieQiName.isNotEmpty()) {
+                jq += MonthEvent(d.solarDay, extractTime(d.jieQiTime), d.lipuJieQiName)
             }
         }
         moonEvents = moon
@@ -428,7 +428,6 @@ private fun HeaderSection(year: Int, month: Int, first: DayInfo?) {
             .fillMaxWidth()
             .background(Brush.horizontalGradient(listOf(GradientStart, GradientEnd)))
             .padding(horizontal = Dimens.paddingLg, vertical = Dimens.paddingSm)
-            .padding(top = Dimens.paddingMd)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -463,47 +462,49 @@ private fun NavSection(
         Modifier
             .fillMaxWidth()
             .background(Brush.horizontalGradient(listOf(GradientStart, GradientEnd)))
-            .padding(horizontal = Dimens.paddingLg, vertical = Dimens.paddingSm),
+            .padding(horizontal = Dimens.paddingSm, vertical = Dimens.paddingXs),
         verticalAlignment = Alignment.CenterVertically
     ) {
         NavIconButton("«", onPrevYear)
         NavIconButton("‹", onPrevMonth)
-        Spacer(Modifier.width(6.dp))
+        Spacer(Modifier.width(2.dp))
 
         TextInputCompact(
             value = yearInput, onValueChange = onYearChange,
             onSubmit = onApplyInput,
-            width = 78.dp,
-            placeholder = "YYYY/B212"
+            width = 58.dp,
+            placeholder = "YYYY"
         )
         Text("年", fontSize = Dimens.fontCaption,
-            color = OnPrimary, modifier = Modifier.padding(horizontal = 2.dp))
+            color = OnPrimary, modifier = Modifier.padding(horizontal = 1.dp))
         TextInputCompact(
             value = monthInput, onValueChange = onMonthChange,
             onSubmit = onApplyInput,
-            width = 40.dp,
+            width = 28.dp,
             keyboardType = KeyboardType.Number,
             placeholder = "M"
         )
         Text("月", fontSize = Dimens.fontCaption,
-            color = OnPrimary, modifier = Modifier.padding(horizontal = 2.dp))
+            color = OnPrimary, modifier = Modifier.padding(horizontal = 1.dp))
 
-        Spacer(Modifier.width(6.dp))
+        Spacer(Modifier.width(2.dp))
         NavIconButton("›", onNextMonth)
         NavIconButton("»", onNextYear)
 
         Spacer(Modifier.weight(1f))
 
-        Button(
-            onClick = onToday,
-            modifier = Modifier.height(30.dp),
-            shape = RoundedCornerShape(Dimens.radiusLg),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Accent, contentColor = Primary
-            ),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+        // 固定宽度, 保证在窄屏也不会被压缩导致"今天"竖排
+        Box(
+            Modifier
+                .width(48.dp)
+                .height(28.dp)
+                .clip(RoundedCornerShape(Dimens.radiusLg))
+                .background(Accent)
+                .clickable(onClick = onToday),
+            contentAlignment = Alignment.Center
         ) {
-            Text("今天", fontSize = Dimens.fontCaption, fontWeight = FontWeight.Medium)
+            Text("今天", fontSize = Dimens.fontCaption, fontWeight = FontWeight.Medium,
+                color = Primary, maxLines = 1, softWrap = false)
         }
     }
 }
@@ -512,14 +513,14 @@ private fun NavSection(
 private fun NavIconButton(icon: String, onClick: () -> Unit) {
     Box(
         Modifier
-            .padding(end = 4.dp)
-            .size(30.dp)
+            .padding(end = 2.dp)
+            .size(26.dp)
             .clip(CircleShape)
             .background(PrimaryLight.copy(alpha = 0.5f))
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Text(icon, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = OnPrimary)
+        Text(icon, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = OnPrimary)
     }
 }
 
@@ -534,14 +535,14 @@ private fun TextInputCompact(
 ) {
     Box(
         Modifier
-            .width(width).height(32.dp)
+            .width(width).height(28.dp)
             .clip(RoundedCornerShape(Dimens.radiusSm))
             .background(PrimaryLight.copy(alpha = 0.4f)),
         contentAlignment = Alignment.Center
     ) {
         if (value.isEmpty() && placeholder.isNotEmpty()) {
             Text(placeholder, color = OnPrimary.copy(alpha = 0.4f),
-                fontSize = Dimens.fontBody, textAlign = TextAlign.Center)
+                fontSize = Dimens.fontCaption, textAlign = TextAlign.Center, maxLines = 1)
         }
         BasicTextField(
             value = value, onValueChange = onValueChange,
@@ -550,7 +551,8 @@ private fun TextInputCompact(
                 textAlign = TextAlign.Center
             ),
             singleLine = true,
-            modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
+            // 只占满宽度、不撑满高度(wrapContentHeight) → 交给外层 Box 垂直居中, 避免数字上浮
+            modifier = Modifier.fillMaxWidth().wrapContentHeight().padding(horizontal = 2.dp),
             keyboardOptions = KeyboardOptions(
                 keyboardType = keyboardType, imeAction = ImeAction.Done
             ),
@@ -594,7 +596,7 @@ private fun TopLocationStrip(
     ) {
         // ── 国际行 ──
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (continents.isNotEmpty()) {
@@ -621,7 +623,7 @@ private fun TopLocationStrip(
         }
         // ── 国内行 ──
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (provinces.isNotEmpty()) {
@@ -661,10 +663,10 @@ private fun DropdownText(
     Box {
         Row(
             Modifier
-                .clip(RoundedCornerShape(Dimens.radiusSm))
+                .clip(RoundedCornerShape(3.dp))
                 .background(PrimaryLight.copy(alpha = 0.1f))
                 .clickable { expanded = true }
-                .padding(horizontal = 8.dp, vertical = 4.dp),
+                .padding(horizontal = 3.dp, vertical = 1.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -706,7 +708,7 @@ private fun YearInfoBar(first: DayInfo?) {
         Modifier
             .fillMaxWidth()
             .background(Surface)
-            .padding(horizontal = Dimens.paddingLg, vertical = Dimens.paddingSm)
+            .padding(horizontal = Dimens.paddingLg, vertical = Dimens.paddingXs)
             .border(0.5.dp, DividerColor),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -825,7 +827,7 @@ private fun DayCell(
         Text(
             subText(day),
             fontSize = Dimens.fontSmall,
-            fontWeight = if (day.jieQiName.isNotEmpty() || day.holiday.isNotEmpty())
+            fontWeight = if (day.lipuJieQiName.isNotEmpty() || day.holiday.isNotEmpty())
                 FontWeight.Medium else FontWeight.Normal,
             color = lunarColor(day, isToday),
             maxLines = 1
@@ -856,7 +858,7 @@ private fun solarColor(day: DayInfo, isToday: Boolean): Color {
 
 private fun lunarColor(day: DayInfo, isToday: Boolean): Color {
     if (day.holiday.isNotEmpty()) return WeekendColor
-    if (day.jieQiName.isNotEmpty()) return JieQiColor
+    if (day.lipuJieQiName.isNotEmpty()) return JieQiColor
     if (isToday) return OnPrimary.copy(alpha = 0.8f)
     return LunarText
 }
@@ -864,7 +866,7 @@ private fun lunarColor(day: DayInfo, isToday: Boolean): Color {
 private fun subText(day: DayInfo): String {
     if (day.holiday.isNotEmpty()) return shortName(day.holiday)
     if (day.major.isNotEmpty()) return shortName(day.major)
-    if (day.jieQiName.isNotEmpty()) return day.jieQiName
+    if (day.lipuJieQiName.isNotEmpty()) return day.lipuJieQiName
     if (day.lunarDayName == "初一") return day.lunarMonthName
     return day.lunarDayName
 }
@@ -909,23 +911,27 @@ private fun BottomInfoBar(
         }
         Spacer(Modifier.height(2.dp))
 
-        // 一行 6 列: 太阳出/中/落 + 月亮出/中/落
+        // 太阳: 一行 3 列 (出/中/落) — 3 列列宽足够放完整时间, 左对齐不折行不留白
         Row(Modifier.fillMaxWidth()) {
-            TinyCell("☀↑", rts?.sunRise     ?: "--:--:--", Modifier.weight(1f))
-            TinyCell("☀",  rts?.sunMeridian ?: "--:--:--", Modifier.weight(1f))
-            TinyCell("☀↓", rts?.sunSet      ?: "--:--:--", Modifier.weight(1f))
-            TinyCell("☾↑", rts?.moonRise    ?: "--:--:--", Modifier.weight(1f))
-            TinyCell("☾",  rts?.moonMeridian?: "--:--:--", Modifier.weight(1f))
-            TinyCell("☾↓", rts?.moonSet     ?: "--:--:--", Modifier.weight(1f))
+            TinyCell("☀↑", rts?.sunRise     ?: DASH, Modifier.weight(1f))
+            TinyCell("☀",  rts?.sunMeridian ?: DASH, Modifier.weight(1f))
+            TinyCell("☀↓", rts?.sunSet      ?: DASH, Modifier.weight(1f))
+        }
+        Spacer(Modifier.height(2.dp))
+        // 月亮: 一行 3 列 (出/中/落)
+        Row(Modifier.fillMaxWidth()) {
+            TinyCell("☾↑", rts?.moonRise    ?: DASH, Modifier.weight(1f))
+            TinyCell("☾",  rts?.moonMeridian?: DASH, Modifier.weight(1f))
+            TinyCell("☾↓", rts?.moonSet     ?: DASH, Modifier.weight(1f))
         }
         Spacer(Modifier.height(2.dp))
 
         // 一行 4 列: 晨/日/昏/白
         Row(Modifier.fillMaxWidth()) {
-            TinyCell("晨", rts?.civilDawn   ?: "--:--:--", Modifier.weight(1f))
-            TinyCell("日", rts?.dayLength   ?: "--:--:--", Modifier.weight(1f))
-            TinyCell("昏", rts?.civilDusk   ?: "--:--:--", Modifier.weight(1f))
-            TinyCell("白", rts?.lightLength ?: "--:--:--", Modifier.weight(1f))
+            TinyCell("晨", rts?.civilDawn   ?: DASH, Modifier.weight(1f))
+            TinyCell("日", rts?.dayLength   ?: DASH, Modifier.weight(1f))
+            TinyCell("昏", rts?.civilDusk   ?: DASH, Modifier.weight(1f))
+            TinyCell("白", rts?.lightLength ?: DASH, Modifier.weight(1f))
         }
 
         // 月相 / 节气 — 流式
@@ -938,18 +944,22 @@ private fun BottomInfoBar(
     }
 }
 
-/** 6/4 列等宽紧凑单元 (label + value), 居中排布 */
+/** 日月升降缺省占位 (完整 HH:mm:ss 形态) */
+private const val DASH = "--:--:--"
+
+/** 3/4 列等宽紧凑单元 (label + value), 左对齐、完整时间不换行不截断 */
 @Composable
 private fun TinyCell(label: String, value: String, modifier: Modifier = Modifier) {
     Row(
         modifier,
-        horizontalArrangement = Arrangement.Center,
+        horizontalArrangement = Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(label, fontSize = Dimens.fontSmall, color = TextSecondary,
             modifier = Modifier.padding(end = 3.dp))
         Text(value, fontSize = Dimens.fontSmall, fontWeight = FontWeight.Medium,
-            color = if (value == "--:--:--") TextSecondary else OnSurface)
+            color = if (value == DASH) TextSecondary else OnSurface,
+            maxLines = 1, softWrap = false)
     }
 }
 
@@ -1081,7 +1091,7 @@ private fun DayDetailDialog(
                         color = PopupSub
                     )
 
-                    val hasEvent = day.jieQiName.isNotEmpty() ||
+                    val hasEvent = day.lipuJieQiName.isNotEmpty() ||
                             day.yueXiangName.isNotEmpty() ||
                             day.holiday.isNotEmpty() ||
                             day.major.isNotEmpty() ||
@@ -1091,8 +1101,8 @@ private fun DayDetailDialog(
                         Spacer(Modifier.height(6.dp))
                         PopupDividerLine()
                         Spacer(Modifier.height(4.dp))
-                        if (day.jieQiName.isNotEmpty()) {
-                            PopupEventLine("🌿", "节气 ${day.jieQiName}",
+                        if (day.lipuJieQiName.isNotEmpty()) {
+                            PopupEventLine("🌿", "节气 ${day.lipuJieQiName}",
                                 extractTime(day.jieQiTime), PopupGreen)
                         }
                         if (day.yueXiangName.isNotEmpty()) {

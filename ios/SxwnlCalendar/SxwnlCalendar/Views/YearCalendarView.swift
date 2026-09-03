@@ -13,6 +13,9 @@ struct YearCalendarView: View {
     @State private var yearInput: String
     @State private var months: [YearCalMonth] = []
     @State private var loading: Bool = false
+    // 农历纪年(干支 + 生肖) — 与月历顶部一致, 取该农历年"正月初一"那天的年柱
+    @State private var yearGZ: String = ""
+    @State private var shengXiao: String = ""
 
     init() {
         let y = Calendar.current.dateComponents([.year], from: Date()).year ?? 2026
@@ -62,15 +65,24 @@ struct YearCalendarView: View {
     // ── 顶部标题 ────────────────────────────────────────────
     private var headerSection: some View {
         HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(YearUtil.astroYearToStr(currentYear)) 年")
-                    .font(.system(size: AppDimens.fontTitle, weight: .bold))
-                    .foregroundColor(AppColors.onPrimary)
-                Text("农历年视图 (按朔月排列)")
-                    .font(.system(size: AppDimens.fontSmall))
-                    .foregroundColor(AppColors.onPrimary.opacity(0.7))
-            }
+            Text("\(YearUtil.astroYearToStr(currentYear)) 年")
+                .font(.system(size: AppDimens.fontTitle, weight: .bold))
+                .foregroundColor(AppColors.onPrimary)
             Spacer()
+            // 农历干支纪年 + 生肖 (与月历顶部风格一致)
+            if !yearGZ.isEmpty {
+                Text("农历")
+                    .font(.system(size: AppDimens.fontCaption))
+                    .foregroundColor(AppColors.onPrimary.opacity(0.7))
+                Text("\(yearGZ)年")
+                    .font(.system(size: AppDimens.fontCaption, weight: .medium))
+                    .foregroundColor(AppColors.accent)
+                if !shengXiao.isEmpty {
+                    Text(" · 生肖\(shengXiao)")
+                        .font(.system(size: AppDimens.fontCaption))
+                        .foregroundColor(AppColors.onPrimary.opacity(0.85))
+                }
+            }
         }
         .padding(.horizontal, AppDimens.paddingLg)
         .padding(.top, AppDimens.paddingXl)
@@ -261,12 +273,18 @@ struct YearCalendarView: View {
         return "\(y)-\(pad2(m.solarMonth))-\(pad2(m.solarDay))"
     }
 
+    // 参考 sxwnl nianLiHTML "历谱MM-DD(精确日 时:分:秒)":
+    //   现代(定气历)精确日==历谱日, 只显示 "MM-DD HH:MM:SS";
+    //   古代(1645前平气)精确交气日常差1天, 括号内补显精确公历日期+时刻.
     private func formatJieQiDate(_ jq: YearCalJieQi, _ m: YearCalMonth) -> String {
-        let date = "\(pad2(jq.solarMonth))-\(pad2(jq.solarDay))"
-        if !jq.time.isEmpty {
-            return "\(date) \(jq.time)"
+        let lipuDate = "\(pad2(jq.solarMonth))-\(pad2(jq.solarDay))"
+        if jq.time.isEmpty {
+            return "\(YearUtil.astroYearToStr(m.solarYear))-\(lipuDate)"
         }
-        return "\(YearUtil.astroYearToStr(m.solarYear))-\(date)"
+        let sameDay = jq.accMonth == jq.solarMonth && jq.accDay == jq.solarDay
+        return sameDay
+            ? "\(lipuDate) \(jq.time)"
+            : "\(lipuDate) (\(pad2(jq.accMonth))-\(pad2(jq.accDay)) \(jq.time))"
     }
 
     private func pad2(_ n: Int) -> String {
@@ -276,11 +294,24 @@ struct YearCalendarView: View {
     // ── 数据加载 ────────────────────────────────────────────
     private func reload() {
         loading = true
+        let year = currentYear
         DispatchQueue.global(qos: .userInitiated).async {
-            let data = SxwnlBridge.getYearCalendar(year: currentYear)
+            let data = SxwnlBridge.getYearCalendar(year: year)
+            // 正月(monthIdx==0 且非闰)初一确定农历年干支+生肖 (立春后两口径一致)
+            var gz = ""
+            var sx = ""
+            if let zhengYue = data.first(where: { $0.monthIdx == 0 && !$0.isLeap }),
+               let di = SxwnlBridge.getDayInfo(year: zhengYue.solarYear,
+                                               month: zhengYue.solarMonth,
+                                               day: zhengYue.solarDay) {
+                gz = di.yearGZ
+                sx = di.shengXiao
+            }
             DispatchQueue.main.async {
                 months = data
-                yearInput = YearUtil.astroYearToStr(currentYear)
+                yearGZ = gz
+                shengXiao = sx
+                yearInput = YearUtil.astroYearToStr(year)
                 loading = false
             }
         }

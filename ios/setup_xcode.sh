@@ -64,7 +64,7 @@ else
     exit 1
 fi
 
-$CXX -std=c++17 -I../src -I. test_capi.cpp sxwnl_capi.cpp ../src/*.cpp -o test_capi_macos 2>&1
+$CXX -std=c++20 -I../src -I. test_capi.cpp sxwnl_capi.cpp ../src/*.cpp -o test_capi_macos 2>&1
 if [ $? -eq 0 ]; then
     echo "  ✓ C++ 编译成功"
     echo ""
@@ -107,7 +107,7 @@ echo "     → 选择 Create，然后编辑内容为:"
 echo '     #import "sxwnl_capi.h"'
 echo ""
 echo "  5. Build Settings 搜索并设置:"
-echo "     → C++ Language Dialect: C++17"
+echo "     → C++ Language Dialect: C++20"
 echo "     → Header Search Paths 添加:"
 echo "       $PROJECT_DIR/SxwnlCalendar/CppSources"
 echo ""

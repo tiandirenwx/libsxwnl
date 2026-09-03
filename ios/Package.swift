@@ -19,7 +19,7 @@ let package = Package(
             cxxSettings: [
                 .headerSearchPath("../src"),
                 .define("SXWNL_BUILDING_CAPI"),
-                .unsafeFlags(["-std=c++17"])
+                .unsafeFlags(["-std=c++20"])
             ]
         ),
     ]

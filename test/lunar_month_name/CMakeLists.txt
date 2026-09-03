@@ -16,6 +16,8 @@ target_include_directories(lunar_month_name_test PRIVATE
 )
 
 set_target_properties(lunar_month_name_test PROPERTIES
-    CXX_STANDARD 17
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )

@@ -45,6 +45,8 @@ import com.sxwnl.calendar.data.BaziResult
 import com.sxwnl.calendar.data.LiuNianItem
 import com.sxwnl.calendar.ui.theme.*
 import com.sxwnl.calendar.util.BaziCalc
+import com.sxwnl.calendar.util.EclipseShareUtil
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -130,8 +132,10 @@ private fun ResultBody(arg: BaziResultArg, onDismiss: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     // Compose 1.6 兼容方案: 用 android.graphics.Picture 录制 Composable.
-    // 在 SimpleReport 上挂 drawWithCache, 截图时直接 picture → Bitmap。
+    // 在待截图区域上挂 drawWithCache, 截图时直接 picture → Bitmap。
+    //   简洁版录制"命书卡片", 专业版录制"命盘表整体"。
     val simpleCardPicture = remember { Picture() }
+    val proCardPicture = remember { Picture() }
 
     Column(Modifier.fillMaxSize()) {
         // 顶部条
@@ -177,36 +181,29 @@ private fun ResultBody(arg: BaziResultArg, onDismiss: () -> Unit) {
             }
 
             if (proMode) {
-                InfoBar(arg, isFemale)
-                PaiPanTable(arg)
-                SummaryBar(arg)
-                LiuNianCard(arg)
+                // 把专业版命盘整体录制到 Picture 供"保存/分享"截图 (含背景)
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .recordToPicture(proCardPicture)
+                        .background(Background)
+                ) {
+                    InfoBar(arg, isFemale)
+                    PaiPanTable(arg)
+                    SummaryBar(arg)
+                    LiuNianCard(arg)
+                }
+                SaveShareRow(
+                    onSave = { saveBaziImage(ctx, scope, proCardPicture) },
+                    onShare = { shareBaziImage(ctx, scope, proCardPicture) }
+                )
             } else {
                 SimpleCard(
                     arg = arg,
                     isFemale = isFemale,
                     picture = simpleCardPicture,
-                    onSave = {
-                        scope.launch {
-                            val bmp = pictureToBitmap(simpleCardPicture)
-                            if (bmp == null) {
-                                Toast.makeText(ctx, "截图失败,请稍后再试", Toast.LENGTH_SHORT).show()
-                                return@launch
-                            }
-                            val ok = withContext(Dispatchers.IO) {
-                                try {
-                                    saveBitmapToGallery(ctx, bmp)
-                                } finally {
-                                    if (!bmp.isRecycled) bmp.recycle()
-                                }
-                            }
-                            Toast.makeText(
-                                ctx,
-                                if (ok) "已保存到相册" else "保存失败",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                    }
+                    onSave = { saveBaziImage(ctx, scope, simpleCardPicture) },
+                    onShare = { shareBaziImage(ctx, scope, simpleCardPicture) }
                 )
             }
         }
@@ -247,43 +244,51 @@ private fun ToggleChip(
 private fun SimpleCard(
     arg: BaziResultArg, isFemale: Boolean,
     picture: Picture,
-    onSave: () -> Unit
+    onSave: () -> Unit,
+    onShare: () -> Unit
 ) {
     Column(
         Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // 把 SimpleReport 录制到 android.graphics.Picture, 供"保存为图片"截图使用。
-        // Compose 1.6 兼容方案 — 不依赖 1.7+ 的 rememberGraphicsLayer。
-        val recordModifier = Modifier.drawWithCache {
-            val w = size.width.toInt().coerceAtLeast(1)
-            val h = size.height.toInt().coerceAtLeast(1)
-            onDrawWithContent {
-                val pictureCanvas = Canvas(picture.beginRecording(w, h))
-                draw(this, this.layoutDirection, pictureCanvas, this.size) {
-                    this@onDrawWithContent.drawContent()
-                }
-                picture.endRecording()
-                drawIntoCanvas { it.nativeCanvas.drawPicture(picture) }
-            }
-        }
         SimpleReport(
             arg = arg,
             isFemale = isFemale,
-            modifier = recordModifier
+            modifier = Modifier.recordToPicture(picture)
         )
+        SaveShareRow(onSave = onSave, onShare = onShare)
+    }
+}
+
+// 保存为图片 + 分享到 (简洁版/专业版共用): 左"保存到相册", 右"分享到其它 app"
+@Composable
+private fun SaveShareRow(onSave: () -> Unit, onShare: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = Dimens.paddingSm),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
         Button(
             onClick = onSave,
-            modifier = Modifier
-                .padding(horizontal = 64.dp, vertical = Dimens.paddingSm)
-                .fillMaxWidth()
-                .height(40.dp),
+            modifier = Modifier.weight(1f).height(40.dp),
             shape = RoundedCornerShape(Dimens.radiusLg),
             colors = ButtonDefaults.buttonColors(
                 containerColor = Accent, contentColor = PrimaryDark
             )
         ) {
             Text("保存为图片",
+                fontSize = Dimens.fontBody, fontWeight = FontWeight.Medium)
+        }
+        Button(
+            onClick = onShare,
+            modifier = Modifier.weight(1f).height(40.dp),
+            shape = RoundedCornerShape(Dimens.radiusLg),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Primary, contentColor = OnPrimary
+            )
+        ) {
+            Text("分享到",
                 fontSize = Dimens.fontBody, fontWeight = FontWeight.Medium)
         }
     }
@@ -302,7 +307,7 @@ private fun SimpleReport(
 
     Box(
         modifier
-            .padding(horizontal = Dimens.paddingMd, vertical = Dimens.paddingMd)
+            .padding(horizontal = Dimens.paddingSm, vertical = Dimens.paddingSm)
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .border(1.dp, GoldLine, RoundedCornerShape(10.dp))
@@ -331,58 +336,54 @@ private fun SimpleReport(
             alpha = 1.0f,
             modifier = Modifier
                 .align(Alignment.Center)
-                .size(240.dp)
+                .size(200.dp)
         )
 
-        // ③ 顶: 命书正文
+        // ③ 顶: 命书正文 (紧凑排布, 力求单屏完整显示)
         Column(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp)
+                .padding(horizontal = 12.dp, vertical = 10.dp)
         ) {
-            Row(Modifier.fillMaxWidth()) {
+            // 标题 (单行, 不占额外竖向空间)
+            Row(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
                 Spacer(Modifier.weight(1f))
                 Text("☯ 八字命书",
-                    fontSize = 13.sp, fontWeight = FontWeight.Bold, color = RedColor)
+                    fontSize = 12.sp, fontWeight = FontWeight.Bold, color = RedColor)
             }
-            Spacer(Modifier.height(10.dp))
 
-            InfoPair("姓名", strip(r.userName), false,
-                "性别", if (isFemale) "女" else "男")
-            InfoPair("生肖", strip(r.shengXiao), false,
-                "年龄", strip(r.age))
-            InfoPair("出生地",
-                "东经%.2f° 北纬%.2f°".format(arg.longitude, arg.latitude), false,
-                "时间标准",
-                if (arg.astEnabled) "真太阳时" else "北京时间(120°E)")
-            SinglePair("公历生日", strip(r.solarBirth), false)
-            Spacer(Modifier.height(4.dp))
-            SinglePair("农历生日", strip(r.lunarBirth), true)
-            Spacer(Modifier.height(8.dp))
+            // 基本信息: 姓名/性别/生肖/年龄 合并为一行
+            InfoQuad(
+                "姓名", strip(r.userName),
+                "性别", if (isFemale) "女" else "男",
+                "生肖", strip(r.shengXiao),
+                "年龄", strip(r.age)
+            )
+            // 出生地 / 时间标准 一行
+            InfoDuo(
+                "出生地", "东经%.2f° 北纬%.2f°".format(arg.longitude, arg.latitude), false,
+                "时间标准", if (arg.astEnabled) "真太阳时" else "北京时间(120°E)", false
+            )
+            // 公历 / 农历各占整行 (内容较长)
+            SinglePair("公历", strip(r.solarBirth), false)
+            SinglePair("农历", strip(r.lunarBirth), true)
 
+            Spacer(Modifier.height(3.dp))
             Text(jieQiParagraph(arg),
-                fontSize = 12.sp, color = InkSoft,
-                lineHeight = 18.sp,
-                modifier = Modifier.padding(bottom = 10.dp))
-
+                fontSize = 11.sp, color = InkSoft, lineHeight = 14.sp)
+            Spacer(Modifier.height(4.dp))
             ThinDivider(color = GoldLine, alpha = 0.6f)
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(4.dp))
 
             SiZhuBlock(arg.result.columns, isFemale)
 
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(4.dp))
             ThinDivider(color = GoldLine, alpha = 0.6f)
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(4.dp))
 
             Text("${strip(r.qiYun)}　${strip(r.jiaoYun)}",
-                fontSize = 12.sp, color = InkSoft,
-                lineHeight = 18.sp,
-                modifier = Modifier.padding(bottom = 10.dp))
-
-            Text("大运 / 流年",
-                fontSize = 13.sp, fontWeight = FontWeight.Bold,
-                color = InkColor,
-                modifier = Modifier.padding(bottom = 6.dp))
+                fontSize = 11.sp, color = InkSoft, lineHeight = 14.sp)
+            Spacer(Modifier.height(3.dp))
 
             DaYunGrid(arg)
         }
@@ -399,49 +400,65 @@ private fun ThinDivider(color: Color, alpha: Float = 1f) {
     )
 }
 
+// 单个『键』值 字段 (紧凑, 单行不换行, 行高收紧)
 @Composable
-private fun InfoPair(
-    k1: String, v1: String, redV1: Boolean,
-    k2: String, v2: String
+private fun InfoField(k: String, v: String, modifier: Modifier, red: Boolean = false) {
+    Row(modifier, verticalAlignment = Alignment.Top) {
+        Text("『$k』", fontSize = 12.sp, color = InkSoft, maxLines = 1, lineHeight = 13.sp)
+        Text(v, fontSize = 12.sp,
+            color = if (red) RedColor else InkColor,
+            maxLines = 1, lineHeight = 13.sp,
+            modifier = Modifier.padding(start = 1.dp))
+    }
+}
+
+// 四字段一行 (姓名/性别/生肖/年龄), 对齐命盘图紧凑排版
+@Composable
+private fun InfoQuad(
+    k1: String, v1: String,
+    k2: String, v2: String,
+    k3: String, v3: String,
+    k4: String, v4: String
 ) {
-    Row(
-        Modifier.fillMaxWidth().padding(bottom = 4.dp),
-        verticalAlignment = Alignment.Top
-    ) {
-        Row(Modifier.weight(1f), verticalAlignment = Alignment.Top) {
-            Text("『$k1』", fontSize = 13.sp, color = InkSoft)
-            Text(v1, fontSize = 13.sp,
-                color = if (redV1) RedColor else InkColor,
-                modifier = Modifier.padding(start = 2.dp))
-        }
-        if (k2.isNotEmpty()) {
-            Row(Modifier.weight(1f).padding(start = 10.dp),
-                verticalAlignment = Alignment.Top) {
-                Text("『$k2』", fontSize = 13.sp, color = InkSoft)
-                Text(v2, fontSize = 13.sp, color = InkColor,
-                    modifier = Modifier.padding(start = 2.dp))
-            }
-        }
+    Row(Modifier.fillMaxWidth().padding(bottom = 1.dp)) {
+        InfoField(k1, v1, Modifier.weight(1.3f))
+        InfoField(k2, v2, Modifier.weight(0.9f))
+        InfoField(k3, v3, Modifier.weight(0.9f))
+        InfoField(k4, v4, Modifier.weight(1.1f))
+    }
+}
+
+// 两字段一行 (出生地/时间标准)
+@Composable
+private fun InfoDuo(
+    k1: String, v1: String, red1: Boolean,
+    k2: String, v2: String, red2: Boolean
+) {
+    Row(Modifier.fillMaxWidth().padding(bottom = 1.dp)) {
+        InfoField(k1, v1, Modifier.weight(1.1f), red1)
+        InfoField(k2, v2, Modifier.weight(1f), red2)
     }
 }
 
 @Composable
 private fun SinglePair(k: String, v: String, red: Boolean) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-        Text("『$k』", fontSize = 13.sp, color = InkSoft)
-        Text(v, fontSize = 13.sp,
+    Row(Modifier.fillMaxWidth().padding(bottom = 1.dp), verticalAlignment = Alignment.Top) {
+        Text("『$k』", fontSize = 12.sp, color = InkSoft, maxLines = 1, lineHeight = 13.sp)
+        Text(v, fontSize = 12.sp,
             color = if (red) RedColor else InkColor,
-            modifier = Modifier.padding(start = 2.dp))
+            maxLines = 1, lineHeight = 13.sp,
+            modifier = Modifier.padding(start = 1.dp))
     }
 }
 
 @Composable
 private fun SiZhuBlock(columns: List<BaziColumn>, isFemale: Boolean) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        // 乾造/坤造 竖排标签, 与天干行对齐 (顶部留白跳过主星行)
         Text(if (isFemale) "坤造" else "乾造",
-            fontSize = 13.sp, color = InkColor,
+            fontSize = 12.sp, color = InkColor,
             fontFamily = WenYueFont,
-            modifier = Modifier.width(26.dp))
+            modifier = Modifier.width(24.dp).padding(top = 16.dp))
         columns.forEachIndexed { i, c ->
             Column(
                 Modifier.weight(1f),
@@ -449,24 +466,26 @@ private fun SiZhuBlock(columns: List<BaziColumn>, isFemale: Boolean) {
             ) {
                 Text(if (i == 2) "日元" else c.ganShiShen,
                     fontSize = 11.sp, fontWeight = FontWeight.Medium,
+                    lineHeight = 12.sp,
                     color = if (i == 2) RedColor else InkSoft)
                 Text(c.gan, fontSize = 18.sp,
-                    fontFamily = WenYueFont,
+                    fontFamily = WenYueFont, lineHeight = 19.sp,
                     color = if (i == 2) RedColor else InkColor,
-                    modifier = Modifier.padding(top = 2.dp))
+                    modifier = Modifier.padding(top = 1.dp))
                 Text(c.zhi, fontSize = 18.sp,
-                    fontFamily = WenYueFont,
+                    fontFamily = WenYueFont, lineHeight = 19.sp,
                     color = InkColor,
                     modifier = Modifier.padding(top = 1.dp))
                 Column(
-                    Modifier.padding(top = 6.dp),
+                    Modifier.padding(top = 3.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     c.cangGan.forEach { cg ->
-                        Row(Modifier.padding(bottom = 1.dp)) {
-                            Text(cg.gan, fontSize = 11.sp,
+                        Row {
+                            Text(cg.gan, fontSize = 10.sp, lineHeight = 11.sp,
                                 fontFamily = WenYueFont, color = InkColor)
-                            Text(cg.shiShen, fontSize = 10.sp, color = InkSoft,
+                            Text(cg.shiShen, fontSize = 10.sp, lineHeight = 11.sp,
+                                color = InkSoft,
                                 modifier = Modifier.padding(start = 2.dp))
                         }
                     }
@@ -490,6 +509,10 @@ private fun jieQiParagraph(arg: BaziResultArg): String {
 private fun DaYunGrid(arg: BaziResultArg) {
     val cols = arg.result.daYunColumns.take(8)
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        // 大運 竖排标签, 与干支行对齐 (顶部留白跳过起运岁数行)
+        Text("大運",
+            fontSize = 12.sp, color = InkColor, fontFamily = WenYueFont,
+            modifier = Modifier.width(22.dp).padding(top = 18.dp))
         cols.forEach { c ->
             DaYunSimpleCell(arg, c, Modifier.weight(1f))
         }
@@ -506,7 +529,7 @@ private fun DaYunSimpleCell(arg: BaziResultArg, c: BaziColumn, modifier: Modifie
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text("${c.startYear - arg.birthYear + 1}",
-            fontSize = 11.sp, fontWeight = FontWeight.Medium,
+            fontSize = 10.sp, fontWeight = FontWeight.Medium,
             color = if (isCur) RedColor else InkSoft)
         Column(
             Modifier
@@ -515,15 +538,15 @@ private fun DaYunSimpleCell(arg: BaziResultArg, c: BaziColumn, modifier: Modifie
                 .background(if (isCur) RedBg else Color.Transparent),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(c.gan, fontSize = 17.sp,
+            Text(c.gan, fontSize = 16.sp,
                 fontFamily = WenYueFont,
                 color = if (isCur) RedColor else InkColor)
-            Text(c.zhi, fontSize = 17.sp,
+            Text(c.zhi, fontSize = 16.sp,
                 fontFamily = WenYueFont,
                 color = if (isCur) RedColor else InkColor)
         }
-        Text("${c.startYear}", fontSize = 9.sp, color = RedColor,
-            modifier = Modifier.padding(top = 2.dp))
+        Text("${c.startYear}", fontSize = 8.sp, color = RedColor,
+            modifier = Modifier.padding(top = 1.dp))
         ThinDivider(color = GoldLine, alpha = 0.5f)
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             (0 until 10).forEach { j ->
@@ -532,7 +555,7 @@ private fun DaYunSimpleCell(arg: BaziResultArg, c: BaziColumn, modifier: Modifie
                 Text(
                     BaziCalc.GAN[BaziCalc.lnGan(y)]
                         + BaziCalc.ZHI[BaziCalc.lnZhi(y)],
-                    fontSize = 13.sp, maxLines = 1,
+                    fontSize = 12.sp, maxLines = 1, lineHeight = 13.sp,
                     fontFamily = WenYueFont,
                     color = if (isCurLN) RedColor else InkColor,
                     modifier = Modifier
@@ -540,11 +563,10 @@ private fun DaYunSimpleCell(arg: BaziResultArg, c: BaziColumn, modifier: Modifie
                         .clip(RoundedCornerShape(3.dp))
                         .background(if (isCurLN) RedBg else Color.Transparent)
                 )
-                Spacer(Modifier.height(2.dp))
             }
         }
-        Text("${c.startYear + 9}", fontSize = 9.sp, color = RedColor,
-            modifier = Modifier.padding(top = 2.dp))
+        Text("${c.startYear + 9}", fontSize = 8.sp, color = RedColor,
+            modifier = Modifier.padding(top = 1.dp))
     }
 }
 
@@ -861,6 +883,58 @@ private fun statusChips(arg: BaziResultArg): List<String> {
     return (0..4).map { i ->
         val st = arg.result.wuXingStatus.getOrNull(i) ?: ""
         "${names[i]}$st"
+    }
+}
+
+// ── 录制 Composable 到 Picture (Compose 1.6 兼容, 不依赖 1.7 rememberGraphicsLayer) ──
+// 挂在待截图区域最外层; onDrawWithContent 内先录制到 picture 再回放到真实画布,
+// 因此背景/子内容都会被捕获, 且滚动容器中仍录制完整高度。
+private fun Modifier.recordToPicture(picture: Picture): Modifier = this.drawWithCache {
+    val w = size.width.toInt().coerceAtLeast(1)
+    val h = size.height.toInt().coerceAtLeast(1)
+    onDrawWithContent {
+        val pictureCanvas = Canvas(picture.beginRecording(w, h))
+        draw(this, this.layoutDirection, pictureCanvas, this.size) {
+            this@onDrawWithContent.drawContent()
+        }
+        picture.endRecording()
+        drawIntoCanvas { it.nativeCanvas.drawPicture(picture) }
+    }
+}
+
+// ── 保存到相册 ────────────────────────────────────────────
+private fun saveBaziImage(ctx: Context, scope: CoroutineScope, picture: Picture) {
+    scope.launch {
+        val bmp = pictureToBitmap(picture)
+        if (bmp == null) {
+            Toast.makeText(ctx, "截图失败,请稍后再试", Toast.LENGTH_SHORT).show()
+            return@launch
+        }
+        val ok = withContext(Dispatchers.IO) {
+            try {
+                saveBitmapToGallery(ctx, bmp)
+            } finally {
+                if (!bmp.isRecycled) bmp.recycle()
+            }
+        }
+        Toast.makeText(ctx, if (ok) "已保存到相册" else "保存失败",
+            Toast.LENGTH_SHORT).show()
+    }
+}
+
+// ── 分享到其它 app (系统分享面板) ─────────────────────────
+private fun shareBaziImage(ctx: Context, scope: CoroutineScope, picture: Picture) {
+    scope.launch {
+        val bmp = pictureToBitmap(picture)
+        if (bmp == null) {
+            Toast.makeText(ctx, "截图失败,请稍后再试", Toast.LENGTH_SHORT).show()
+            return@launch
+        }
+        // saveBitmap 落盘后会 recycle bmp
+        val file = withContext(Dispatchers.IO) {
+            EclipseShareUtil.saveBitmap(ctx, bmp, "bazi_${System.currentTimeMillis()}.png")
+        }
+        EclipseShareUtil.shareImage(ctx, file, "分享八字命盘")
     }
 }
 

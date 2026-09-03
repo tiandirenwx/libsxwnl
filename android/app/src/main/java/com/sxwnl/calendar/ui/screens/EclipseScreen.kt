@@ -387,7 +387,7 @@ private fun SolarDetailSheet(item: SolarEclipseItem) {
                         EclipseShareUtil.saveBitmap(context, bmp,
                             "solar_${item.year}_${item.month}_${item.day}.png")
                     }
-                    EclipseShareUtil.shareImage(context, file)
+                    EclipseShareUtil.shareImage(context, file, "分享日月食截图")
                 }
             }
             ShareIconButton("分享日程 ICS", Icons.Default.Event) {
@@ -658,7 +658,7 @@ private fun LunarDetailSheet(item: LunarEclipseItem) {
                         EclipseShareUtil.saveBitmap(context, bmp,
                             "lunar_${item.year}_${item.month}_${item.day}.png")
                     }
-                    EclipseShareUtil.shareImage(context, file)
+                    EclipseShareUtil.shareImage(context, file, "分享日月食截图")
                 }
             }
             ShareIconButton("分享日程 ICS", Icons.Default.Event) {

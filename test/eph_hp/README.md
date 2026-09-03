@@ -21,7 +21,7 @@ cmake --build build --target eph_hp_test
 ./build/bin/eph_hp_test        # 跑 Test A/B/C/D
 ```
 
-**前置依赖**:`curl` + `python3`(生成 header 用)+ `cmake >= 3.25` + C++17 编译器。
+**前置依赖**:`curl` + `python3`(生成 header 用)+ `cmake >= 3.25` + C++20 编译器。
 
 如果 `cmake configure` 看到:
 ```

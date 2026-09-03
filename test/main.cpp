@@ -84,7 +84,8 @@ int main(int argc, char *argv[])
                       << "  干支:" << Gan[ygz.tg] << Zhi[ygz.dz]
                                    << Gan[mgz.tg] << Zhi[mgz.dz]
                                    << Gan[dgz.tg] << Zhi[dgz.dz];
-            if (d.hasJieQi())    std::cout << "  ✦" << d.getJieQiName()    << " " << d.getJieQiTimeStr();
+            if (d.hasLiPuJieQi()) std::cout << "  ✦" << d.getLiPuJieQiName(); // 历谱节气日(整日表+QB, 与权威 sxwnl 网页版一致)
+            if (d.hasJieQi())    std::cout << "  ◆" << d.getJieQiName()    << " " << d.getJieQiTimeStr(); // 天文精确交气时刻
             if (d.hasYueXiang()) std::cout << "  ●" << d.getYueXiangName() << " " << d.getYueXiangTimeStr();
             auto info = d.getFestivalInfo();
             if (!info.holiday.empty()) std::cout << "  ★" << info.holiday;

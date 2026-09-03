@@ -43,6 +43,10 @@ data class DayInfo @JvmOverloads constructor(
     var lunarDayName: String = "",
     var jieQiName: String = "",
     var jieQiTime: String = "",
+    // 历谱口径节气(整日表+QB, 对齐 sxwnl 网页版): 日历格子标签建议用此值,
+    // 古代(1645年前)与天文口径 jieQi 可能差 1 天; 精确时刻仍用 jieQiTime。
+    var lipuJieQi: Int = -1,
+    var lipuJieQiName: String = "",
     var shengXiao: String = "",
     var constellationName: String = "",
     var weekName: String = "",
@@ -111,7 +115,10 @@ data class YearCalJieQi @JvmOverloads constructor(
     var solarDay: Int = 0,
     var time: String = "",
     var dayOffset: Int = 0,
-    var dayName: String = ""
+    var dayName: String = "",
+    // 精确交气(天文定气)所在公历日期; 古代可能与历谱 solarMonth/solarDay 差 1 天
+    var accMonth: Int = 0,
+    var accDay: Int = 0
 )
 
 class YearCalMonth @JvmOverloads constructor(

@@ -46,6 +46,10 @@ android {
     namespace = "com.sxwnl.calendar"
     compileSdk = 34
 
+    // 锁定 NDK r27 (LTS): 其内置 SDK 元数据解析器支持 repository2/04 schema,
+    // 避免旧 NDK(25.x) 扫描到新版 system-image 的 package.xml 时报 CXX5304.
+    ndkVersion = "27.2.12479018"
+
     defaultConfig {
         applicationId = "com.sxwnl.calendar"
         minSdk = 26
@@ -59,7 +63,7 @@ android {
 
         externalNativeBuild {
             cmake {
-                cppFlags += "-std=c++17"
+                cppFlags += "-std=c++20"
             }
         }
     }

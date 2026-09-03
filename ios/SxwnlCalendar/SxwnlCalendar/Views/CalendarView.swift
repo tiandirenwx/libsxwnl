@@ -318,7 +318,7 @@ struct CalendarView: View {
             }
             Text(cellSubText(day))
                 .font(.system(size: AppDimens.fontSmall,
-                              weight: (!day.jieQiName.isEmpty || !day.holiday.isEmpty)
+                              weight: (!day.lipuJieQiName.isEmpty || !day.holiday.isEmpty)
                                       ? .medium : .regular))
                 .foregroundColor(dayLunarColor(day))
                 .lineLimit(1)
@@ -370,7 +370,7 @@ struct CalendarView: View {
 
     private func dayLunarColor(_ day: DayInfo) -> Color {
         if !day.holiday.isEmpty { return AppColors.weekend }
-        if !day.jieQiName.isEmpty { return AppColors.jieQi }
+        if !day.lipuJieQiName.isEmpty { return AppColors.jieQi }
         if isToday(day) { return AppColors.onPrimary.opacity(0.8) }
         return AppColors.lunarText
     }
@@ -388,7 +388,7 @@ struct CalendarView: View {
     private func cellSubText(_ day: DayInfo) -> String {
         if !day.holiday.isEmpty { return shortName(day.holiday) }
         if !day.major.isEmpty { return shortName(day.major) }
-        if !day.jieQiName.isEmpty { return day.jieQiName }
+        if !day.lipuJieQiName.isEmpty { return day.lipuJieQiName }
         if day.lunarDayName == "初一" { return day.lunarMonthName }
         return day.lunarDayName
     }
@@ -559,11 +559,11 @@ struct CalendarView: View {
                     time: extractTime(d.yueXiangTime),
                     name: label))
             }
-            if !d.jieQiName.isEmpty {
+            if !d.lipuJieQiName.isEmpty {
                 jq.append(MonthEvent(
                     day: d.solarDay,
                     time: extractTime(d.jieQiTime),
-                    name: d.jieQiName))
+                    name: d.lipuJieQiName))
             }
         }
         moonEvents = moon
@@ -878,8 +878,8 @@ private struct DayDetailPopover: View {
 
                     if hasEvent {
                         dividerLine.padding(.vertical, 4)
-                        if !day.jieQiName.isEmpty {
-                            eventLine("🌿", "节气 \(day.jieQiName)",
+                        if !day.lipuJieQiName.isEmpty {
+                            eventLine("🌿", "节气 \(day.lipuJieQiName)",
                                       extractTime(day.jieQiTime), PopupPalette.green)
                         }
                         if !day.yueXiangName.isEmpty {
@@ -944,7 +944,7 @@ private struct DayDetailPopover: View {
     }
 
     private var hasEvent: Bool {
-        !day.jieQiName.isEmpty || !day.yueXiangName.isEmpty ||
+        !day.lipuJieQiName.isEmpty || !day.yueXiangName.isEmpty ||
         !day.holiday.isEmpty || !day.major.isEmpty ||
         !day.minor.isEmpty  || !day.misc.isEmpty
     }

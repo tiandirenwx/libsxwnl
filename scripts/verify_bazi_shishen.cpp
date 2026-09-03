@@ -1,4 +1,4 @@
-// g++ -std=c++17 -I../src -I../capi scripts/verify_bazi_shishen.cpp capi/sxwnl_capi.cpp src/*.cpp -o /tmp/verify_bazi
+// g++ -std=c++20 -I../src -I../capi scripts/verify_bazi_shishen.cpp capi/sxwnl_capi.cpp src/*.cpp -o /tmp/verify_bazi
 #include "sxwnl_capi.h"
 #include <cstdio>
 #include <cstring>

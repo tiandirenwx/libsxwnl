@@ -73,10 +73,8 @@ struct BaziResultView: View {
                 VStack(spacing: 0) {
                     versionToggle.padding(.top, AppDimens.paddingMd)
                     if proMode {
-                        infoBar
-                        paiPanTable
-                        summaryBar
-                        liuNianCard
+                        proReport
+                        saveShareRow(makeImage: renderPro)
                     } else {
                         simpleCard
                     }
@@ -143,7 +141,27 @@ struct BaziResultView: View {
             simpleReport
                 .id("baziSimpleCard")
 
-            Button { saveImage() } label: {
+            saveShareRow(makeImage: renderSimple)
+        }
+    }
+
+    // 专业版命盘整体 (供显示 + 截图共用)
+    private var proReport: some View {
+        VStack(spacing: 0) {
+            infoBar
+            paiPanTable
+            summaryBar
+            liuNianCard
+        }
+        .background(AppColors.background)
+    }
+
+    // 保存为图片 + 分享到 (简洁版/专业版共用)
+    private func saveShareRow(makeImage: @escaping () -> UIImage?) -> some View {
+        HStack(spacing: 12) {
+            Button {
+                if let img = makeImage() { saveImage(img) } else { showToast("截图失败") }
+            } label: {
                 Text("保存为图片")
                     .font(.system(size: AppDimens.fontBody, weight: .medium))
                     .foregroundColor(AppColors.primaryDark)
@@ -152,48 +170,59 @@ struct BaziResultView: View {
                     .background(AppColors.accent)
                     .cornerRadius(AppDimens.radiusLg)
             }
-            .padding(.horizontal, 64)
-            .padding(.vertical, AppDimens.paddingSm)
+            Button {
+                if let img = makeImage() { shareImage(img) } else { showToast("截图失败") }
+            } label: {
+                Text("分享到")
+                    .font(.system(size: AppDimens.fontBody, weight: .medium))
+                    .foregroundColor(AppColors.onPrimary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 40)
+                    .background(AppColors.primary)
+                    .cornerRadius(AppDimens.radiusLg)
+            }
         }
+        .padding(.horizontal, 24)
+        .padding(.vertical, AppDimens.paddingSm)
     }
 
     private var simpleReport: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // 抬头
+            // 抬头 (单行, 不占额外竖向空间)
             HStack {
                 Spacer()
                 Text("☯ 八字命书")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: 12, weight: .bold))
                     .foregroundColor(redColor)
             }
-            .padding(.bottom, 10)
+            .padding(.bottom, 4)
 
-            // ── 命主信息 ──
-            infoPair("姓名", strip(arg.result.userName), false,
-                     "性别", isFemale ? "女" : "男")
-            infoPair("生肖", strip(arg.result.shengXiao), false,
+            // ── 命主信息 (紧凑排布, 力求单屏完整显示) ──
+            // 姓名/性别/生肖/年龄 合并为一行
+            infoQuad("姓名", strip(arg.result.userName),
+                     "性别", isFemale ? "女" : "男",
+                     "生肖", strip(arg.result.shengXiao),
                      "年龄", strip(arg.result.age))
-            infoPair("出生地",
-                     String(format: "东经%.2f° 北纬%.2f°",
-                            arg.longitude, arg.latitude), false,
-                     "时间标准",
-                     arg.astEnabled ? "真太阳时" : "北京时间(120°E)")
-            singlePair("公历生日", strip(arg.result.solarBirth), false)
-                .padding(.bottom, 4)
-            singlePair("农历生日", strip(arg.result.lunarBirth), true)
-                .padding(.bottom, 8)
+            // 出生地 / 时间标准 一行
+            infoDuo("出生地",
+                    String(format: "东经%.2f° 北纬%.2f°", arg.longitude, arg.latitude), false,
+                    "时间标准",
+                    arg.astEnabled ? "真太阳时" : "北京时间(120°E)", false)
+            // 公历 / 农历各占整行 (内容较长)
+            singlePair("公历", strip(arg.result.solarBirth), false)
+            singlePair("农历", strip(arg.result.lunarBirth), true)
 
             // 节气/司令段落
             Text(jieQiParagraph())
-                .font(.system(size: 12))
+                .font(.system(size: 11))
                 .foregroundColor(inkSoft)
-                .lineSpacing(4)
-                .padding(.bottom, 10)
+                .lineSpacing(2)
+                .padding(.top, 3)
 
             Rectangle()
                 .fill(goldLine.opacity(0.6))
                 .frame(height: 1)
-                .padding(.bottom, 10)
+                .padding(.vertical, 4)
 
             // 四柱
             siZhuBlock
@@ -201,23 +230,19 @@ struct BaziResultView: View {
             Rectangle()
                 .fill(goldLine.opacity(0.6))
                 .frame(height: 1)
-                .padding(.top, 6).padding(.bottom, 10)
+                .padding(.vertical, 4)
 
             // 起运/交运
             Text("\(strip(arg.result.qiYun))　\(strip(arg.result.jiaoYun))")
-                .font(.system(size: 12))
+                .font(.system(size: 11))
                 .foregroundColor(inkSoft)
-                .lineSpacing(4)
-                .padding(.bottom, 10)
+                .lineSpacing(2)
 
-            // 大运 / 流年
-            Text("大运 / 流年")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundColor(inkColor)
-                .padding(.bottom, 6)
+            // 大运 / 流年 (大運标签内嵌于表格左侧)
             daYunGrid
+                .padding(.top, 3)
         }
-        .padding(.horizontal, 16).padding(.vertical, 14)
+        .padding(.horizontal, 12).padding(.vertical, 10)
         // 背景三层 (对齐鸿蒙 simpleReport() + Python Bazi.py 原版命书):
         //   ① 底: 宣纸兜底纯色 + 宣纸纹理图 bz_paper (scaledToFill 铺满)
         //   ② 中: 生肖印 bz_<zodiac> (以卡片中心居中, opacity=1.0)
@@ -238,67 +263,84 @@ struct BaziResultView: View {
                 Image(zodiacName())
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 240, height: 240)
+                    .frame(width: 200, height: 200)
                     .opacity(1.0)
             }
         )
         .overlay(RoundedRectangle(cornerRadius: 10)
             .stroke(goldLine, lineWidth: 1))
         .cornerRadius(10)
-        .padding(.horizontal, AppDimens.paddingMd)
-        .padding(.top, AppDimens.paddingMd)
+        .padding(.horizontal, AppDimens.paddingSm)
+        .padding(.top, AppDimens.paddingSm)
         .shadow(color: Color.black.opacity(0.1), radius: 4, y: 2)
     }
 
-    private func infoPair(_ k1: String, _ v1: String, _ redV1: Bool,
-                          _ k2: String, _ v2: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            HStack(alignment: .top, spacing: 2) {
-                Text("『\(k1)』")
-                    .font(.system(size: 13))
-                    .foregroundColor(inkSoft)
-                Text(v1)
-                    .font(.system(size: 13))
-                    .foregroundColor(redV1 ? redColor : inkColor)
-                Spacer(minLength: 0)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            if !k2.isEmpty {
-                HStack(alignment: .top, spacing: 2) {
-                    Text("『\(k2)』")
-                        .font(.system(size: 13))
-                        .foregroundColor(inkSoft)
-                    Text(v2)
-                        .font(.system(size: 13))
-                        .foregroundColor(inkColor)
-                    Spacer(minLength: 0)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
+    // 单个『键』值字段 (紧凑, 单行不换行; 键固定宽度, 值可尾部截断)
+    private func infoField(_ k: String, _ v: String, _ red: Bool = false) -> some View {
+        HStack(alignment: .top, spacing: 1) {
+            Text("『\(k)』")
+                .font(.system(size: 12))
+                .foregroundColor(inkSoft)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+            Text(v)
+                .font(.system(size: 12))
+                .foregroundColor(red ? redColor : inkColor)
+                .lineLimit(1)
+            Spacer(minLength: 0)
         }
-        .padding(.bottom, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // 四字段一行 (姓名/性别/生肖/年龄), 对齐命盘图紧凑排版
+    private func infoQuad(_ k1: String, _ v1: String,
+                          _ k2: String, _ v2: String,
+                          _ k3: String, _ v3: String,
+                          _ k4: String, _ v4: String) -> some View {
+        HStack(alignment: .top, spacing: 4) {
+            infoField(k1, v1)
+            infoField(k2, v2)
+            infoField(k3, v3)
+            infoField(k4, v4)
+        }
+        .padding(.bottom, 1)
+    }
+
+    // 两字段一行 (出生地/时间标准)
+    private func infoDuo(_ k1: String, _ v1: String, _ red1: Bool,
+                         _ k2: String, _ v2: String, _ red2: Bool) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            infoField(k1, v1, red1)
+            infoField(k2, v2, red2)
+        }
+        .padding(.bottom, 1)
     }
 
     private func singlePair(_ k: String, _ v: String, _ red: Bool) -> some View {
-        HStack(alignment: .top, spacing: 2) {
+        HStack(alignment: .top, spacing: 1) {
             Text("『\(k)』")
-                .font(.system(size: 13))
+                .font(.system(size: 12))
                 .foregroundColor(inkSoft)
+                .fixedSize(horizontal: true, vertical: false)
             Text(v)
-                .font(.system(size: 13))
+                .font(.system(size: 12))
                 .foregroundColor(red ? redColor : inkColor)
+                .lineLimit(1)
             Spacer(minLength: 0)
         }
+        .padding(.bottom, 1)
     }
 
     private var siZhuBlock: some View {
         HStack(alignment: .top, spacing: 0) {
+            // 乾造/坤造 标签, 顶部留白使其与天干行对齐 (跳过主星行)
             Text(isFemale ? "坤造" : "乾造")
-                .font(wenYue(13))
+                .font(wenYue(12))
                 .foregroundColor(inkColor)
-                .frame(width: 26, alignment: .leading)
+                .frame(width: 24, alignment: .leading)
+                .padding(.top, 16)
             ForEach(Array(arg.result.columns.enumerated()), id: \.offset) { i, c in
-                VStack(spacing: 2) {
+                VStack(spacing: 1) {
                     Text(i == 2 ? "日元" : c.ganShiShen)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(i == 2 ? redColor : inkSoft)
@@ -312,7 +354,7 @@ struct BaziResultView: View {
                         ForEach(Array(c.cangGan.enumerated()), id: \.offset) { _, cg in
                             HStack(spacing: 2) {
                                 Text(cg.gan)
-                                    .font(wenYue(11))
+                                    .font(wenYue(10))
                                     .foregroundColor(inkColor)
                                 Text(cg.shiShen)
                                     .font(.system(size: 10))
@@ -320,7 +362,7 @@ struct BaziResultView: View {
                             }
                         }
                     }
-                    .padding(.top, 6)
+                    .padding(.top, 3)
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -348,6 +390,12 @@ struct BaziResultView: View {
 
     private var daYunGrid: some View {
         HStack(alignment: .top, spacing: 0) {
+            // 大運 标签, 顶部留白使其与干支行对齐 (跳过起运岁数行)
+            Text("大運")
+                .font(wenYue(12))
+                .foregroundColor(inkColor)
+                .frame(width: 22, alignment: .leading)
+                .padding(.top, 18)
             ForEach(Array(daYunColumns8().enumerated()), id: \.offset) { _, c in
                 daYunColumnView(c)
             }
@@ -358,40 +406,40 @@ struct BaziResultView: View {
         let isCur = c.startYear == curDaYunStart
         return VStack(spacing: 0) {
             Text("\(daYunStartAge(c.startYear))")
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: 10, weight: .medium))
                 .foregroundColor(isCur ? redColor : inkSoft)
             VStack(spacing: 0) {
-                Text(c.gan).font(wenYue(17))
+                Text(c.gan).font(wenYue(16))
                     .foregroundColor(isCur ? redColor : inkColor)
-                Text(c.zhi).font(wenYue(17))
+                Text(c.zhi).font(wenYue(16))
                     .foregroundColor(isCur ? redColor : inkColor)
             }
             .padding(.horizontal, 2).padding(.vertical, 1)
             .background(isCur ? redBg : .clear)
             .cornerRadius(3)
             Text("\(c.startYear)")
-                .font(.system(size: 9))
+                .font(.system(size: 8))
                 .foregroundColor(redColor)
-                .padding(.top, 2)
+                .padding(.top, 1)
             Rectangle().fill(goldLine.opacity(0.5))
-                .frame(height: 0.5).padding(.vertical, 3)
+                .frame(height: 0.5).padding(.vertical, 2)
             VStack(spacing: 0) {
                 ForEach(decadeYears(c.startYear), id: \.self) { y in
                     let curLN = y == curLiuNianYear
                     Text(BaziCalc.GAN[BaziCalc.lnGan(y)]
                          + BaziCalc.ZHI[BaziCalc.lnZhi(y)])
-                        .font(wenYue(13))
+                        .font(wenYue(12))
+                        .lineLimit(1)
                         .foregroundColor(curLN ? redColor : inkColor)
                         .padding(.horizontal, 1)
                         .background(curLN ? redBg : .clear)
                         .cornerRadius(3)
-                        .padding(.bottom, 2)
                 }
             }
             Text("\(c.startYear + 9)")
-                .font(.system(size: 9))
+                .font(.system(size: 8))
                 .foregroundColor(redColor)
-                .padding(.top, 2)
+                .padding(.top, 1)
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 1)
@@ -758,17 +806,49 @@ struct BaziResultView: View {
         }
     }
 
-    // ── 截图保存 ────────────────────────────────────────────
-    private func saveImage() {
-        let view = simpleReport
-            .frame(width: UIScreen.main.bounds.width - 2 * AppDimens.paddingMd)
-        let renderer = ImageRenderer(content: view)
+    // ── 截图 / 保存 / 分享 ───────────────────────────────────
+    /// 把任意 SwiftUI 视图按指定宽度离屏渲染成 UIImage (ImageRenderer 渲染完整内容, 不受滚动影响)
+    private func snapshot(_ view: some View, width: CGFloat) -> UIImage? {
+        let sized = view.frame(width: width)
+        let renderer = ImageRenderer(content: sized)
         renderer.scale = UIScreen.main.scale
-        guard let ui = renderer.uiImage else {
-            showToast("截图失败"); return
-        }
-        UIImageWriteToSavedPhotosAlbum(ui, nil, nil, nil)
+        return renderer.uiImage
+    }
+
+    private func renderSimple() -> UIImage? {
+        snapshot(simpleReport, width: UIScreen.main.bounds.width - 2 * AppDimens.paddingSm)
+    }
+
+    private func renderPro() -> UIImage? {
+        snapshot(proReport, width: UIScreen.main.bounds.width)
+    }
+
+    private func saveImage(_ image: UIImage) {
+        UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
         showToast("已保存到相册")
+    }
+
+    /// 调起系统分享面板 (UIActivityViewController), 分享到其它 app
+    private func shareImage(_ image: UIImage) {
+        let av = UIActivityViewController(activityItems: [image], applicationActivities: nil)
+        guard let scene = UIApplication.shared.connectedScenes
+                .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
+              let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else {
+            showToast("分享失败"); return
+        }
+        // iPad: 需要 popover 锚点, 否则会崩溃
+        if let pop = av.popoverPresentationController {
+            pop.sourceView = root.view
+            pop.sourceRect = CGRect(x: root.view.bounds.midX,
+                                    y: root.view.bounds.midY, width: 0, height: 0)
+            pop.permittedArrowDirections = []
+        }
+        // 找到最上层已呈现的控制器再 present, 避免"already presenting"
+        var top = root
+        while let presented = top.presentedViewController {
+            top = presented
+        }
+        top.present(av, animated: true)
     }
 
     private func showToast(_ msg: String) {

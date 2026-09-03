@@ -23,6 +23,7 @@ Day::Day(int d,long double jf)
     this->lunar_month_style_ = 0;
     this->solar_month_ = 0;
     this->jieling_ = -2;
+    this->lipu_jq_idx_ = -2;
     this->lunar_lichun_year_ = 0;
     this->lunar_jun_year_ = 0;
     this->huangdi_year_ = 0;
@@ -116,6 +117,15 @@ void Day::checkLunarData()
     this->cur_lq_ = int(this->d0 - vecZQ[15]); // 距立秋的天数
     this->cur_mz_ = int(this->d0 - vecZQ[11]); // 距芒种的天数
     this->cur_xs_ = int(this->d0 - vecZQ[13]); // 距小暑的天数
+
+    // 历谱口径节气(整日表 + QB 定气修正): 对应权威 sxwnl 的 ob.Ljq, 与网页版日历"节气日"一致。
+    // qk 取最靠近 d0 的节气索引(0=冬至..23=大雪); 若 d0 恰为该节气整日则记录, 否则置 -1。
+    // (与 sxwnl/lunar.js: qk=int2((d0-ZQ[0]-7)/15.2184); if(qk<23&&d0>=ZQ[qk+1])qk++; if(d0==ZQ[qk])Ljq=jqmc[qk] 等价)
+    {
+        int qk = int2((this->d0 - vecZQ[0] - 7) / 15.2184);
+        if (qk < 23 && this->d0 >= vecZQ[qk + 1]) qk++;
+        this->lipu_jq_idx_ = (this->d0 == int2(vecZQ[qk])) ? (int8_t)qk : (int8_t)-1;
+    }
 
     // 记录在 SSQ 表内的月序号, 节日模块用于查询下一月名
     this->lunar_month_idx_ = mk;
@@ -1072,6 +1082,26 @@ std::string Day::getJieQiName()
 {
     if (!this->hasJieQi()) return {};
     int idx = this->getJieQi();
+    if (idx < 0 || idx >= 24) return {};
+    return Jqmc[idx];
+}
+
+bool Day::hasLiPuJieQi()
+{
+    this->checkLunarData();
+    return this->lipu_jq_idx_ >= 0;
+}
+
+uint8_t Day::getLiPuJieQi()
+{
+    this->checkLunarData();
+    return this->lipu_jq_idx_;
+}
+
+std::string Day::getLiPuJieQiName()
+{
+    if (!this->hasLiPuJieQi()) return {};
+    int idx = this->lipu_jq_idx_;
     if (idx < 0 || idx >= 24) return {};
     return Jqmc[idx];
 }

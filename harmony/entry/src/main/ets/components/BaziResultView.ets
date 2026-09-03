@@ -2,9 +2,11 @@ import { AppColors, AppDimens } from '../common/Constants'
 import { BaziResult, BaziColumn, CangGanItem, LiuNianItem } from '../services/NativeBridge'
 import { GAN, ZHI, BaziCalc } from '../model/BaziInput'
 import { image } from '@kit.ImageKit'
-import { fileIo as fs } from '@kit.CoreFileKit'
+import { fileIo as fs, fileUri } from '@kit.CoreFileKit'
 import { common } from '@kit.AbilityKit'
 import { photoAccessHelper } from '@kit.MediaLibraryKit'
+import { systemShare } from '@kit.ShareKit'
+import { uniformTypeDescriptor as utd } from '@kit.ArkData'
 
 /** 结果页入参 (class 形式, 满足 ArkTS 严格类型规则) */
 export class BaziResultArg {
@@ -53,10 +55,15 @@ export struct BaziResultView {
       Column() {
         this.versionToggle()
         if (this.proMode) {
-          this.infoBar()
-          this.paiPanTable()
-          this.summaryBar()
-          this.liuNianCard()
+          // 专业版命盘整体套一层带 id 的容器供截图(保存/分享)
+          Column() {
+            this.infoBar()
+            this.paiPanTable()
+            this.summaryBar()
+            this.liuNianCard()
+          }
+          .width('100%').id('baziProCard').backgroundColor(AppColors.BACKGROUND)
+          this.saveShareRow('baziProCard')
         } else {
           this.simpleCard()
         }
@@ -158,44 +165,70 @@ export struct BaziResultView {
   simpleCard() {
     Column() {
       this.simpleReport()
-      // 使用安全控件 SaveButton: 用户点击后系统授予一次性写相册授权, 无需声明/申请权限。
-      // SaveButton 属性集不含 margin, 需用外层容器设置外边距。
-      Column() {
-        SaveButton({ icon: SaveIconStyle.FULL_FILLED, text: SaveDescription.SAVE_IMAGE, buttonType: ButtonType.Capsule })
-          .width('60%').height(40).fontSize(AppDimens.FONT_BODY).fontWeight(FontWeight.Medium)
-          .fontColor(AppColors.PRIMARY_DARK).iconColor(AppColors.PRIMARY_DARK)
-          .backgroundColor(AppColors.ACCENT)
-          .borderRadius(AppDimens.BORDER_RADIUS_LG)
-          .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
-            if (result === SaveButtonOnClickResult.SUCCESS) {
-              this.saveImageToGallery()
-            } else {
-              this.toast('没有相册写入授权')
-            }
-          })
-      }
-      .width('100%').alignItems(HorizontalAlign.Center)
-      .margin({ top: AppDimens.PADDING_SM, bottom: AppDimens.PADDING_SM })
+      this.saveShareRow('baziSimpleCard')
     }
     .width('100%').alignItems(HorizontalAlign.Center)
   }
 
-  // 一行命主信息(两组 key:value); 左右各占一半, 值可换行, 避免长文本(如经纬度/时间标准)被截断
+  // 保存为图片 + 分享到 (简洁版/专业版共用)
+  //  · 左: 安全控件 SaveButton, 点击后系统授予一次性写相册授权, 无需声明/申请权限;
+  //  · 右: 普通按钮调起系统分享面板, 分享到其它 app。
   @Builder
-  infoPair(k1: string, v1: string, redV1: boolean, k2: string, v2: string) {
+  saveShareRow(snapshotId: string) {
     Row() {
-      Row() {
-        Text(`『${k1}』`).fontSize(13).fontColor(this.inkSoft).flexShrink(0)
-        Text(v1).fontSize(13).fontColor(redV1 ? this.redColor : this.inkColor).margin({ left: 2 }).layoutWeight(1)
-      }.layoutWeight(1).alignItems(VerticalAlign.Top)
-      if (k2.length > 0) {
-        Row() {
-          Text(`『${k2}』`).fontSize(13).fontColor(this.inkSoft).flexShrink(0)
-          Text(v2).fontSize(13).fontColor(this.inkColor).margin({ left: 2 }).layoutWeight(1)
-        }.layoutWeight(1).alignItems(VerticalAlign.Top).margin({ left: 10 })
-      }
+      SaveButton({ icon: SaveIconStyle.FULL_FILLED, text: SaveDescription.SAVE_IMAGE, buttonType: ButtonType.Capsule })
+        .layoutWeight(1).height(40).fontSize(AppDimens.FONT_BODY).fontWeight(FontWeight.Medium)
+        .fontColor(AppColors.PRIMARY_DARK).iconColor(AppColors.PRIMARY_DARK)
+        .backgroundColor(AppColors.ACCENT)
+        .borderRadius(AppDimens.BORDER_RADIUS_LG)
+        .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
+          if (result === SaveButtonOnClickResult.SUCCESS) {
+            this.saveImageToGallery(snapshotId)
+          } else {
+            this.toast('没有相册写入授权')
+          }
+        })
+      Button('分享到')
+        .layoutWeight(1).height(40).fontSize(AppDimens.FONT_BODY).fontWeight(FontWeight.Medium)
+        .fontColor(AppColors.ON_PRIMARY).backgroundColor(AppColors.PRIMARY)
+        .borderRadius(AppDimens.BORDER_RADIUS_LG)
+        .margin({ left: 12 })
+        .onClick(() => { this.shareImage(snapshotId) })
     }
-    .width('100%').margin({ bottom: 4 }).alignItems(VerticalAlign.Top)
+    .width('100%').padding({ left: 24, right: 24 })
+    .margin({ top: AppDimens.PADDING_SM, bottom: AppDimens.PADDING_SM })
+  }
+
+  // 单个『键』值字段 (紧凑, 单行不换行; 键固定, 值可尾部省略)
+  @Builder
+  infoField(k: string, v: string, red: boolean, weight: number) {
+    Row() {
+      Text(`『${k}』`).fontSize(12).fontColor(this.inkSoft).flexShrink(0)
+      Text(v).fontSize(12).fontColor(red ? this.redColor : this.inkColor)
+        .margin({ left: 1 }).layoutWeight(1).maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+    }.layoutWeight(weight).alignItems(VerticalAlign.Top)
+  }
+
+  // 四字段一行 (姓名/性别/生肖/年龄), 对齐命盘图紧凑排版
+  @Builder
+  infoQuad(k1: string, v1: string, k2: string, v2: string,
+    k3: string, v3: string, k4: string, v4: string) {
+    Row() {
+      this.infoField(k1, v1, false, 13)
+      this.infoField(k2, v2, false, 9)
+      this.infoField(k3, v3, false, 9)
+      this.infoField(k4, v4, false, 11)
+    }.width('100%').margin({ bottom: 1 }).alignItems(VerticalAlign.Top)
+  }
+
+  // 两字段一行 (出生地/时间标准)
+  @Builder
+  infoDuo(k1: string, v1: string, red1: boolean, k2: string, v2: string, red2: boolean) {
+    Row() {
+      this.infoField(k1, v1, red1, 11)
+      this.infoField(k2, v2, red2, 10)
+    }.width('100%').margin({ bottom: 1 }).alignItems(VerticalAlign.Top)
   }
 
   @Builder
@@ -213,64 +246,66 @@ export struct BaziResultView {
         //   ArkUI 里 .align() 只影响子内部内容对齐, 不影响子在父 Stack 中的位置;
         //   必须用 .position({x:'50%',y:'50%'}) + .markAnchor({x:'50%',y:'50%'}).
         Image(this.zodiacRes())
-          .width(240).height(240)
+          .width(200).height(200)
           .objectFit(ImageFit.Contain)
           .opacity(1.0)
           .position({ x: '50%', y: '50%' })
           .markAnchor({ x: '50%', y: '50%' })
 
-        // ② 命书正文 (决定 Stack 高度, 覆盖生肖印之上)
+        // ② 命书正文 (紧凑排布, 力求单屏完整显示; 覆盖生肖印之上)
         Column() {
-          // 抬头品牌
+          // 抬头品牌 (单行, 不占额外竖向空间)
           Row() {
             Blank()
-            Text('☯ 八字命书').fontSize(13).fontColor(this.redColor).fontWeight(FontWeight.Bold)
-          }.width('100%').margin({ bottom: 10 })
-
-          // ── 命主信息 ──
-          this.infoPair('姓名', this.strip(this.arg.result.userName), false,
-            '性别', this.arg.result.gender !== undefined && this.arg.result.gender.indexOf('女') >= 0 ? '女' : '男')
-          this.infoPair('生肖', this.strip(this.arg.result.shengXiao), false, '年龄', this.strip(this.arg.result.age))
-          this.infoPair('出生地', `东经${this.arg.longitude.toFixed(2)}° 北纬${this.arg.latitude.toFixed(2)}°`, false,
-            '时间标准', this.arg.astEnabled ? '真太阳时' : '北京时间(120°E)')
-          Row() {
-            Text('『公历生日』').fontSize(13).fontColor(this.inkSoft)
-            Text(this.strip(this.arg.result.solarBirth)).fontSize(13).fontColor(this.inkColor).margin({ left: 2 }).layoutWeight(1)
+            Text('☯ 八字命书').fontSize(12).fontColor(this.redColor).fontWeight(FontWeight.Bold)
           }.width('100%').margin({ bottom: 4 })
+
+          // ── 命主信息 (姓名/性别/生肖/年龄 合并为一行) ──
+          this.infoQuad('姓名', this.strip(this.arg.result.userName),
+            '性别', this.arg.result.gender !== undefined && this.arg.result.gender.indexOf('女') >= 0 ? '女' : '男',
+            '生肖', this.strip(this.arg.result.shengXiao),
+            '年龄', this.strip(this.arg.result.age))
+          this.infoDuo('出生地', `东经${this.arg.longitude.toFixed(2)}° 北纬${this.arg.latitude.toFixed(2)}°`, false,
+            '时间标准', this.arg.astEnabled ? '真太阳时' : '北京时间(120°E)', false)
+          // 公历 / 农历各占整行 (内容较长)
           Row() {
-            Text('『农历生日』').fontSize(13).fontColor(this.inkSoft)
-            Text(this.strip(this.arg.result.lunarBirth)).fontSize(13).fontColor(this.redColor).margin({ left: 2 }).layoutWeight(1)
-          }.width('100%').margin({ bottom: 8 })
+            Text('『公历』').fontSize(12).fontColor(this.inkSoft).flexShrink(0)
+            Text(this.strip(this.arg.result.solarBirth)).fontSize(12).fontColor(this.inkColor)
+              .margin({ left: 1 }).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          }.width('100%').margin({ bottom: 1 })
+          Row() {
+            Text('『农历』').fontSize(12).fontColor(this.inkSoft).flexShrink(0)
+            Text(this.strip(this.arg.result.lunarBirth)).fontSize(12).fontColor(this.redColor)
+              .margin({ left: 1 }).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          }.width('100%').margin({ bottom: 1 })
 
           // ── 节气/司令 段落 ──
           Text(this.jieQiParagraph())
-            .fontSize(12).fontColor(this.inkSoft).width('100%').lineHeight(20).margin({ bottom: 10 })
+            .fontSize(11).fontColor(this.inkSoft).width('100%').lineHeight(15).margin({ top: 3 })
 
-          Divider().color(this.goldLine).opacity(0.6).margin({ bottom: 10 })
+          Divider().color(this.goldLine).opacity(0.6).margin({ top: 4, bottom: 4 })
 
           // ── 四柱(主星/天干/地支/藏干) ──
           this.siZhuBlock()
 
-          Divider().color(this.goldLine).opacity(0.6).margin({ top: 6, bottom: 10 })
+          Divider().color(this.goldLine).opacity(0.6).margin({ top: 4, bottom: 4 })
 
           // ── 起运/交运 段落 ──
           Text(`${this.strip(this.arg.result.qiYun)}　${this.strip(this.arg.result.jiaoYun)}`)
-            .fontSize(12).fontColor(this.inkSoft).width('100%').lineHeight(20).margin({ bottom: 10 })
+            .fontSize(11).fontColor(this.inkSoft).width('100%').lineHeight(15)
 
-          // ── 大运 / 流年 网格 ──
-          Text('大运 / 流年').fontSize(13).fontWeight(FontWeight.Bold).fontColor(this.inkColor)
-            .width('100%').margin({ bottom: 6 })
+          // ── 大运 / 流年 网格 (大運标签内嵌于表格左侧) ──
           this.daYunGrid()
         }.width('100%')
       }
       .width('100%')
     }
-    .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 12 })
+    .width('100%').padding({ left: 12, right: 12, top: 10, bottom: 10 })
     .backgroundImage($r('app.media.bz_paper'), ImageRepeat.NoRepeat)
     .backgroundImageSize(ImageSize.Cover)
     .id('baziSimpleCard')
     .width('100%')
-    .margin({ left: AppDimens.PADDING_MD, right: AppDimens.PADDING_MD, top: AppDimens.PADDING_MD })
+    .margin({ left: AppDimens.PADDING_SM, right: AppDimens.PADDING_SM, top: AppDimens.PADDING_SM })
     .borderRadius(10).clip(true)
     .border({ width: 1, color: this.goldLine })
     .shadow({ radius: 8, color: AppColors.CARD_SHADOW_COLOR, offsetY: 2 })
@@ -289,24 +324,24 @@ export struct BaziResultView {
   @Builder
   siZhuBlock() {
     Row() {
-      // 乾造/坤造
+      // 乾造/坤造 (顶部留白, 与天干行对齐, 跳过主星行)
       Text(this.arg.result.gender !== undefined && this.arg.result.gender.indexOf('女') >= 0 ? '坤造' : '乾造')
-        .fontSize(13).fontFamily('WenYue').fontColor(this.inkColor).width(26)
+        .fontSize(12).fontFamily('WenYue').fontColor(this.inkColor).width(24).margin({ top: 16 })
       ForEach(this.arg.result.columns, (c: BaziColumn, i: number) => {
         Column() {
           Text(i === 2 ? '日元' : c.ganShiShen)
             .fontSize(11).fontColor(i === 2 ? this.redColor : this.inkSoft).fontWeight(FontWeight.Medium)
           Text(c.gan).fontSize(18).fontFamily('WenYue')
-            .fontColor(i === 2 ? this.redColor : this.inkColor).margin({ top: 2 })
+            .fontColor(i === 2 ? this.redColor : this.inkColor).margin({ top: 1 })
           Text(c.zhi).fontSize(18).fontFamily('WenYue').fontColor(this.inkColor).margin({ top: 1 })
           Column() {
             ForEach(c.cangGan, (cg: CangGanItem) => {
               Row() {
-                Text(cg.gan).fontSize(11).fontFamily('WenYue').fontColor(this.inkColor)
+                Text(cg.gan).fontSize(10).fontFamily('WenYue').fontColor(this.inkColor)
                 Text(cg.shiShen).fontSize(10).fontColor(this.inkSoft).margin({ left: 2 })
-              }.margin({ bottom: 1 })
+              }
             })
-          }.margin({ top: 6 }).alignItems(HorizontalAlign.Center)
+          }.margin({ top: 3 }).alignItems(HorizontalAlign.Center)
         }
         .layoutWeight(1).alignItems(HorizontalAlign.Center)
       })
@@ -320,50 +355,53 @@ export struct BaziResultView {
     return all.length > 8 ? all.slice(0, 8) : all
   }
 
-  // 大运 / 流年: 8 列铺满(不滚动), 当年大运/流年仅标红不加框, 流年横排
+  // 大运 / 流年: 左侧"大運"标签 + 8 列铺满(不滚动), 当年大运/流年仅标红不加框, 流年横排
   @Builder
   daYunGrid() {
     Row() {
+      // 大運 标签 (顶部留白, 与干支行对齐, 跳过起运岁数行)
+      Text('大運').fontSize(12).fontFamily('WenYue').fontColor(this.inkColor)
+        .width(22).margin({ top: 18 })
       ForEach(this.daYunColumns8(), (c: BaziColumn) => {
         this.daYunColumn(c)
       })
     }
-    .width('100%').alignItems(VerticalAlign.Top)
+    .width('100%').alignItems(VerticalAlign.Top).margin({ top: 3 })
   }
 
   @Builder
   daYunColumn(c: BaziColumn) {
     Column() {
       // 起运虚岁
-      Text(`${this.daYunStartAge(c.startYear)}`).fontSize(11)
+      Text(`${this.daYunStartAge(c.startYear)}`).fontSize(10)
         .fontColor(c.startYear === this.curDaYunStart() ? this.redColor : this.inkSoft)
         .fontWeight(FontWeight.Medium)
       // 大运干支(上下堆叠; 当年大运标红+底色, 无边框)
       Column() {
-        Text(c.gan).fontSize(17).fontFamily('WenYue')
+        Text(c.gan).fontSize(16).fontFamily('WenYue')
           .fontColor(c.startYear === this.curDaYunStart() ? this.redColor : this.inkColor)
-        Text(c.zhi).fontSize(17).fontFamily('WenYue')
+        Text(c.zhi).fontSize(16).fontFamily('WenYue')
           .fontColor(c.startYear === this.curDaYunStart() ? this.redColor : this.inkColor)
       }
       .padding({ left: 2, right: 2, top: 1, bottom: 1 })
       .backgroundColor(c.startYear === this.curDaYunStart() ? this.redBg : Color.Transparent)
       .borderRadius(3)
       // 起始年
-      Text(`${c.startYear}`).fontSize(9).fontColor(this.redColor).margin({ top: 2 })
-      Divider().color(this.goldLine).opacity(0.5).margin({ top: 3, bottom: 3 }).width('86%')
+      Text(`${c.startYear}`).fontSize(8).fontColor(this.redColor).margin({ top: 1 })
+      Divider().color(this.goldLine).opacity(0.5).margin({ top: 2, bottom: 2 }).width('86%')
       // 10 个流年(横排: 干支同一行; 当年流年标红)
       Column() {
         ForEach(this.decadeYears(c.startYear), (y: number) => {
           Text(GAN[BaziCalc.lnGan(y)] + ZHI[BaziCalc.lnZhi(y)])
-            .fontSize(13).fontFamily('WenYue').maxLines(1)
+            .fontSize(12).fontFamily('WenYue').maxLines(1)
             .fontColor(y === this.curLiuNianYear() ? this.redColor : this.inkColor)
             .padding({ left: 1, right: 1 })
             .backgroundColor(y === this.curLiuNianYear() ? this.redBg : Color.Transparent)
-            .borderRadius(3).margin({ bottom: 2 })
+            .borderRadius(3)
         })
       }
       // 止于年
-      Text(`${c.startYear + 9}`).fontSize(9).fontColor(this.redColor).margin({ top: 2 })
+      Text(`${c.startYear + 9}`).fontSize(8).fontColor(this.redColor).margin({ top: 1 })
     }
     .layoutWeight(1).alignItems(HorizontalAlign.Center).padding({ left: 1, right: 1 })
   }
@@ -379,11 +417,11 @@ export struct BaziResultView {
   // 截图并保存到系统相册。
   //  · 必须在 SaveButton(安全控件)的 onClick 回调内、且授权成功后调用, 由系统授予一次性写相册权限;
   //  · ImagePacker / PixelMap / 文件描述符均确保释放, 避免 native 资源泄漏。
-  async saveImageToGallery() {
+  async saveImageToGallery(snapshotId: string) {
     let pm: image.PixelMap | undefined
     const packer: image.ImagePacker = image.createImagePacker()
     try {
-      pm = await this.getUIContext().getComponentSnapshot().get('baziSimpleCard')
+      pm = await this.getUIContext().getComponentSnapshot().get(snapshotId)
       const opts: image.PackingOption = { format: 'image/png', quality: 100 }
       const buf: ArrayBuffer = await packer.packToData(pm, opts)
 
@@ -401,6 +439,54 @@ export struct BaziResultView {
     } catch (e) {
       console.error('saveImageToGallery failed: ' + JSON.stringify(e))
       this.toast('保存失败')
+    } finally {
+      packer.release()
+      if (pm !== undefined) {
+        await pm.release()
+      }
+    }
+  }
+
+  // 截图并调起系统分享面板, 分享到其它 app。
+  //  · 快照 → PNG → 写入沙箱缓存 → fileUri 转可分享 uri → systemShare.ShareController;
+  //  · 分享无需相册授权, 用普通按钮触发即可。
+  async shareImage(snapshotId: string) {
+    let pm: image.PixelMap | undefined
+    const packer: image.ImagePacker = image.createImagePacker()
+    try {
+      pm = await this.getUIContext().getComponentSnapshot().get(snapshotId)
+      const opts: image.PackingOption = { format: 'image/png', quality: 100 }
+      const buf: ArrayBuffer = await packer.packToData(pm, opts)
+
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext
+      const dir: string = ctx.cacheDir + '/shares'
+      try {
+        fs.mkdirSync(dir)
+      } catch (_) {
+        // 目录已存在时忽略
+      }
+      const path: string = dir + '/bazi_' + Date.now() + '.png'
+      const file = fs.openSync(path, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC)
+      try {
+        fs.writeSync(file.fd, buf)
+      } finally {
+        fs.closeSync(file)
+      }
+
+      const uri: string = fileUri.getUriFromPath(path)
+      const shareData: systemShare.SharedData = new systemShare.SharedData({
+        utd: utd.UniformDataType.PNG,
+        uri: uri,
+        title: '八字命盘'
+      })
+      const controller: systemShare.ShareController = new systemShare.ShareController(shareData)
+      await controller.show(ctx, {
+        selectionMode: systemShare.SelectionMode.SINGLE,
+        previewMode: systemShare.SharePreviewMode.DETAIL
+      })
+    } catch (e) {
+      console.error('shareImage failed: ' + JSON.stringify(e))
+      this.toast('分享失败')
     } finally {
       packer.release()
       if (pm !== undefined) {

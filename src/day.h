@@ -62,7 +62,8 @@ private:
     int8_t yx_idx_;    // 月相索引
     long double yxjd_;   	// 月相时刻(儒略日)
    
-    int8_t jieling_;    //节令值
+    int8_t jieling_;    //节令值(天文口径, qi_accurate 精确交气时刻所在日)
+    int8_t lipu_jq_idx_; //历谱口径节气索引(整日表+QB定气修正, 对应 sxwnl ob.Ljq); -2未算 -1无 0-23
     uint8_t xingzuo_;   //星座
     long double jieqi_jd_;   //节气最体的时间
 
@@ -136,11 +137,17 @@ public:
     uint8_t getYueXiang();
     long double getYueXiangJD();
 
-    //是否有节气
+    //是否有节气(天文口径: qi_accurate 精确交气时刻所在日)
     bool hasJieQi();
     // 获取节气
     uint8_t getJieQi() ;
     long double getJieQiJD();
+
+    // 历谱口径节气(整日表 + QB 定气修正, 对应权威 sxwnl 网页版日历标注/ob.Ljq)
+    // 与天文口径 getJieQi*() 的差异: 古代(1645年以前)因 QB 修正, 两者所在日可能相差 1 天;
+    // 1645年及以后二者一致。月历"节气日"标注应使用本口径以对齐权威 sxwnl。
+    bool hasLiPuJieQi();
+    uint8_t getLiPuJieQi();
     // 获取星座
     uint8_t  getConstellation();
 
@@ -164,8 +171,9 @@ public:
     // ── 派生显示字段(单一事实源, 各上层模块/UI 直接复用) ──
     std::string getLunarMonthName();   // "正月"/"闰二月"
     std::string getLunarDayName();     // "初一".."三十"
-    std::string getJieQiName();        // "" 或 "冬至"
-    std::string getJieQiTimeStr();     // "" 或 "HH:MM:SS"
+    std::string getJieQiName();        // "" 或 "冬至" (天文口径)
+    std::string getJieQiTimeStr();     // "" 或 "HH:MM:SS" (天文口径)
+    std::string getLiPuJieQiName();    // "" 或 "冬至" (历谱口径, 整日表+QB, 对齐权威 sxwnl 网页版)
     std::string getYueXiangName();     // "" 或 "朔/上弦/望/下弦"
     std::string getYueXiangTimeStr();  // "" 或 "HH:MM:SS"
     std::string getConstellationName();// "白羊座"

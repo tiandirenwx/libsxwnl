@@ -118,6 +118,17 @@ static void fill_day_info(Day *d, SxwnlDayInfo *out) {
         out->jie_qi_time[0] = '\0';
     }
 
+    // 历谱口径节气(整日表+QB, 对齐 sxwnl 网页版 ob.Ljq): 端上日历格子标签用此值,
+    // 古代与天文口径 jie_qi 可能差 1 天; 精确时刻仍取 jie_qi_time(天文)。
+    if (d->hasLiPuJieQi()) {
+        out->lipu_jie_qi = d->getLiPuJieQi();
+        safe_copy(out->lipu_jie_qi_name, sizeof(out->lipu_jie_qi_name),
+                  Jqmc[d->getLiPuJieQi()]);
+    } else {
+        out->lipu_jie_qi = -1;
+        out->lipu_jie_qi_name[0] = '\0';
+    }
+
     if (d->hasYueXiang()) {
         out->yue_xiang = d->getYueXiang();
         safe_copy(out->yue_xiang_name, sizeof(out->yue_xiang_name),
@@ -251,7 +262,8 @@ int sxwnl_get_almanac(int year, int month, int day, SxwnlAlmanac *out) {
         ctx.lunar_day     = d->getLunarDay();
         ctx.is_leap_month = d->isLunarLeap();
         ctx.julian_day    = static_cast<double>(d->getJulianDate());
-        ctx.today_jie_qi  = d->hasJieQi() ? d->getJieQi() : -1;
+        // 历谱口径(整日表+QB): 与日历"节气日"同源同日, 保证黄历特别提示与日历一致
+        ctx.today_jie_qi  = d->hasLiPuJieQi() ? d->getLiPuJieQi() : -1;
         // 探查"明日"是否为节气: 用儒略日 +1 反推日期再查
         {
             int yn = year, mn = month, dn = day;
@@ -261,7 +273,7 @@ int sxwnl_get_almanac(int year, int month, int day, SxwnlAlmanac *out) {
             int dim = kDaysPerMonth[mn] + (mn == 2 && isLeap(yn) ? 1 : 0);
             if (++dn > dim) { dn = 1; if (++mn > 12) { mn = 1; ++yn; } }
             std::unique_ptr<Day> dn_obj(sxtwl::fromSolar(yn, (uint8_t)mn, dn));
-            if (dn_obj && dn_obj->hasJieQi()) ctx.tomorrow_jie_qi = dn_obj->getJieQi();
+            if (dn_obj && dn_obj->hasLiPuJieQi()) ctx.tomorrow_jie_qi = dn_obj->getLiPuJieQi();
         }
 
         const auto a = sxwnl::almanac::query(ctx);
@@ -685,12 +697,17 @@ int sxwnl_get_year_calendar(int year, SxwnlYearCalMonth *out, int max_count) {
                 if (qiDay) {
                     GZ g = qiDay->getDayGZ();
                     safe_copy(jq.gz, sizeof(jq.gz), gz_str(g));
-                    // 精确交节时刻仅在 qiDay->hasJieQi() 时可用
-                    if (qiDay->hasJieQi()) {
-                        safe_copy(jq.time, sizeof(jq.time),
-                                  JD::timeStr(qiDay->getJieQiJD()));
-                    }
                 }
+                // 精确交气时刻: 直接对历谱气日做 qi_accurate2 精化(对齐 sxwnl
+                // nianLiHTML / LunarYear::getNianLiStr), 而非依赖 Day::hasJieQi().
+                //   古代(1645 年前)平气历谱日与天文定气日可能差 1 天, 此时
+                //   hasJieQi() 在历谱日上为 false, 会漏掉时刻; 直接精化则恒有值.
+                long double qiAcc = qi_accurate2(qiJdRel);  // J2000 相对精确交气(北京时)
+                Time accT = JD::JD2DD(qiAcc + (long double)J2000);
+                jq.acc_month = accT.M;
+                jq.acc_day   = (int)accT.D;
+                safe_copy(jq.time, sizeof(jq.time),
+                          JD::timeStr(qiAcc + (long double)J2000));
             }
             m.jq_count = jqCount;
             ++count;

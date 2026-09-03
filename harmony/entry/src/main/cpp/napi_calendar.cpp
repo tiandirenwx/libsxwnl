@@ -10,12 +10,14 @@ static napi_value dayInfoToNapi(napi_env env, const SxwnlDayInfo &d) {
         .i("yearGan",     d.year_gan)      .i("yearZhi",     d.year_zhi)
         .i("monthGan",    d.month_gan)     .i("monthZhi",    d.month_zhi)
         .i("dayGan",      d.day_gan)       .i("dayZhi",      d.day_zhi)
-        .i("jieQi",       d.jie_qi)        .i("yueXiang",    d.yue_xiang)
+        .i("jieQi",       d.jie_qi)        .i("lipuJieQi",   d.lipu_jie_qi)
+        .i("yueXiang",    d.yue_xiang)
         .i("constellation", d.constellation).i("jian12",      d.jian12)
         .s("yearGZ",         d.year_gz)        .s("monthGZ",     d.month_gz)
         .s("dayGZ",          d.day_gz)         .s("lunarMonthName", d.lunar_month_name)
         .s("lunarDayName",   d.lunar_day_name) .s("jieQiName",   d.jie_qi_name)
-        .s("jieQiTime",      d.jie_qi_time)    .s("shengXiao",   d.sheng_xiao)
+        .s("jieQiTime",      d.jie_qi_time)    .s("lipuJieQiName", d.lipu_jie_qi_name)
+        .s("shengXiao",   d.sheng_xiao)
         .s("constellationName", d.constellation_name)
         .s("weekName",       d.week_name)      .s("yueXiangName", d.yue_xiang_name)
         .s("yueXiangTime",   d.yue_xiang_time)
@@ -150,7 +152,9 @@ napi_value NapiGetYearCalendar(napi_env env, napi_callback_info info) {
                 .i("solarDay",   jq.solar_day)
                 .s("time",       jq.time)
                 .i("dayOffset",  jq.day_offset)
-                .s("dayName",    jq.day_name));
+                .s("dayName",    jq.day_name)
+                .i("accMonth",   jq.acc_month)
+                .i("accDay",     jq.acc_day));
         }
         arr.push(NObj(env)
             .i("monthIdx",   m.month_idx)

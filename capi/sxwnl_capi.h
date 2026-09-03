@@ -38,7 +38,7 @@ typedef struct {
     int32_t day_gan;
     int32_t day_zhi;
 
-    int32_t jie_qi;             // -1 if none, 0-23
+    int32_t jie_qi;             // -1 if none, 0-23 (天文口径: qi_accurate 精确交气时刻所在日)
     int32_t yue_xiang;          // -1 if none, 0-3
     int32_t constellation;      // 星座 0-11
     int32_t jian12;             // 建除十二 0-11
@@ -48,8 +48,8 @@ typedef struct {
     char day_gz[8];
     char lunar_month_name[16];  // "正月", "闰二月"
     char lunar_day_name[12];    // "初一", "十五"
-    char jie_qi_name[12];       // "" if none
-    char jie_qi_time[32];       // "" if none
+    char jie_qi_name[12];       // "" if none (天文口径, 与 jie_qi 对应)
+    char jie_qi_time[32];       // "" if none (天文精确交气时刻 HH:MM:SS)
     char sheng_xiao[8];         // "鼠"
     char constellation_name[12];
     char week_name[16];         // "星期一"
@@ -83,6 +83,16 @@ typedef struct {
 
     // ── 儒略日(对应当日 12:00, 与 sxwnl/lunar.js Bd0+J2000 一致) ─
     double julian_day;
+
+    // ── 历谱口径节气 (追加字段, 向后兼容) ──────────────
+    //  与上面 jie_qi/jie_qi_name(天文口径)的区别:
+    //  历谱口径采用整日表 + QB 定气修正(对应 sxwnl 网页版 ob.Ljq),
+    //  对古代(1645 年以前)节气所在公历日可能与天文口径相差 1 天,
+    //  与权威 sxwnl 网页版日历"节气日"一致; 1645 年以后两者相同。
+    //  历谱口径是"整日"概念, 无精确时刻(精确时刻仍取 jie_qi_time)。
+    //  端上日历格子的节气标签建议用 lipu_jie_qi_name, 精确交节时刻用 jie_qi_time。
+    int32_t lipu_jie_qi;        // -1 if none, 0-23 (历谱口径)
+    char    lipu_jie_qi_name[12]; // "" if none (历谱口径)
 } SxwnlDayInfo;
 
 // ─── Calendar functions ───
@@ -177,11 +187,16 @@ typedef struct {
     int32_t idx;                // 节气索引 0..23 (0=冬至)
     char    name[12];           // 节气名称, 如 "小寒"
     char    gz[8];              // 节气日的干支(以日柱算)
-    int32_t solar_month;        // 公历月 1-12
-    int32_t solar_day;          // 公历日
-    char    time[32];           // 节气精确时刻 "HH:MM:SS"
+    int32_t solar_month;        // 历谱口径公历月 1-12 (整日气表所在日, 古代平气)
+    int32_t solar_day;          // 历谱口径公历日
+    char    time[32];           // 节气精确交气时刻 "HH:MM:SS" (天文定气)
     int32_t day_offset;         // 距本农历月首(初一)的天数 0..29
     char    day_name[12];       // 本月内日名称, 如 "初一"/"十五"
+    // 精确交气(天文定气)所在公历日期. 1645 年前平气历谱日可能与其差 1 天;
+    // 现代(定气历)则与 solar_month/solar_day 相同. 用于完整还原
+    // sxwnl nianLiHTML 的 "历谱MM-DD(精确日 时:分:秒)" 展示.
+    int32_t acc_month;          // 精确交气公历月 1-12
+    int32_t acc_day;            // 精确交气公历日
 } SxwnlYearCalJieQi;
 
 typedef struct {

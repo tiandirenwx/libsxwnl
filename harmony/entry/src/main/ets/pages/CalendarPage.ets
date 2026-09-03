@@ -273,8 +273,8 @@ export struct CalendarPage {
         else if (yueName === '望') label = '望月'
         moon.push({ day: d.solarDay, time: yt, name: label })
       }
-      if (d.jieQiName !== '') {
-        jq.push({ day: d.solarDay, time: this.extractTime(d.jieQiTime), name: d.jieQiName })
+      if (d.lipuJieQiName !== '') {
+        jq.push({ day: d.solarDay, time: this.extractTime(d.jieQiTime), name: d.lipuJieQiName })
       }
     }
     this.moonEvents = moon
@@ -345,7 +345,7 @@ export struct CalendarPage {
   getCellSubText(day: DayInfo): string {
     if (day.holiday && day.holiday.length > 0) return this.shortName(day.holiday)
     if (day.major && day.major.length > 0)     return this.shortName(day.major)
-    if (day.jieQiName && day.jieQiName.length > 0) return day.jieQiName
+    if (day.lipuJieQiName && day.lipuJieQiName.length > 0) return day.lipuJieQiName
     if (day.lunarDayName === '初一') return day.lunarMonthName
     return day.lunarDayName
   }
@@ -646,7 +646,7 @@ export struct CalendarPage {
       Text(this.getCellSubText(day))
         .fontSize(AppDimens.FONT_SMALL)
         .fontColor(this.getDayLunarColor(day))
-        .fontWeight(day.jieQiName !== '' || day.holiday !== '' ?
+        .fontWeight(day.lipuJieQiName !== '' || day.holiday !== '' ?
           FontWeight.Medium : FontWeight.Normal)
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Clip })
@@ -760,7 +760,7 @@ export struct CalendarPage {
 
   getDayLunarColor(day: DayInfo): string {
     if (day.holiday !== '') return AppColors.WEEKEND_COLOR
-    if (day.jieQiName !== '') return AppColors.JIEQI_COLOR
+    if (day.lipuJieQiName !== '') return AppColors.JIEQI_COLOR
     if (this.isToday(day)) return AppColors.ON_PRIMARY + 'CC'
     return AppColors.LUNAR_TEXT
   }
@@ -827,12 +827,12 @@ export struct CalendarPage {
         '#DCE0F2', AppDimens.FONT_SMALL)
 
       // 8) 节气/月相/节日
-      if (day.jieQiName !== '' || day.yueXiangName !== '' ||
+      if (day.lipuJieQiName !== '' || day.yueXiangName !== '' ||
           day.holiday !== '' || day.major !== '' ||
           day.minor !== '' || day.misc !== '') {
         Divider().color('#5A5F8C').margin({ top: 4, bottom: 3 })
-        if (day.jieQiName !== '') {
-          this.popupEventLine('🌿', `节气 ${day.jieQiName}`,
+        if (day.lipuJieQiName !== '') {
+          this.popupEventLine('🌿', `节气 ${day.lipuJieQiName}`,
             day.jieQiTime !== '' ? this.extractTime(day.jieQiTime) : '', '#80E0A7')
         }
         if (day.yueXiangName !== '') {

@@ -35,7 +35,7 @@
 
 ```
 libsxwnl/
-├── src/                    # C++17 核心库
+├── src/                    # C++20 核心库
 ├── capi/                   # 统一 C API（三端共用）
 │   ├── sxwnl_capi.h        # 头文件
 │   └── sxwnl_capi.cpp      # 实现
@@ -70,7 +70,7 @@ libsxwnl/
     ↓
 统一 C API  (capi/sxwnl_capi.{h,cpp})
     ↓
-libsxwnl C++17 核心（零外部依赖，星历数据内嵌）
+libsxwnl C++20 核心（零外部依赖，星历数据内嵌）
 ```
 
 核心层完全平台无关，新增平台只需补一层薄桥接 + UI。

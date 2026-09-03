@@ -1,6 +1,6 @@
 # 寿星万年历 — Android 版
 
-基于 `libsxwnl` C++17 核心库的 Android 原生万年历应用，使用 **Kotlin + Jetpack Compose Material3**。
+基于 `libsxwnl` C++20 核心库的 Android 原生万年历应用，使用 **Kotlin + Jetpack Compose Material3**。
 
 ## 功能（与鸿蒙端一致）
 
@@ -21,7 +21,7 @@ SxwnlNative.kt (Kotlin) ↔ JNI (jni_bridge.cpp + jni_eclipse_map.cpp)
     ↓
 公共 C API (capi/sxwnl_capi.{h,cpp})  ← 三端共享
     ↓
-libsxwnl C++17 核心 (src/*.cpp)
+libsxwnl C++20 核心 (src/*.cpp)
 ```
 
 ## 构建

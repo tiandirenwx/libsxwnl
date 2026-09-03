@@ -14,6 +14,9 @@ export struct YearCalendarPage {
   @State yearInput: string = YearUtil.astroYearToStr(new Date().getFullYear())
   @State months: YearCalMonth[] = []
   @State loading: boolean = false
+  // 农历纪年(干支 + 生肖) — 与月历顶部一致, 取该农历年"正月初一"那天的年柱
+  @State yearGZ: string = ''
+  @State shengXiao: string = ''
 
   aboutToAppear() {
     this.reload()
@@ -26,6 +29,21 @@ export struct YearCalendarPage {
     } catch (e) {
       console.error('YearCalendar load failed: ' + JSON.stringify(e))
       this.months = []
+    }
+    // 正月(monthIdx==0 且非闰)初一确定农历年干支+生肖 (立春后, 两口径一致)
+    this.yearGZ = ''
+    this.shengXiao = ''
+    const zhengYue = this.months.find(
+      (m: YearCalMonth): boolean => m.monthIdx === 0 && !m.isLeap)
+    if (zhengYue !== undefined) {
+      try {
+        const di = NativeBridge.getDayInfo(
+          zhengYue.solarYear, zhengYue.solarMonth, zhengYue.solarDay)
+        this.yearGZ = di.yearGZ
+        this.shengXiao = di.shengXiao
+      } catch (e) {
+        console.error('YearCalendar ganzhi load failed: ' + JSON.stringify(e))
+      }
     }
     this.loading = false
     this.yearInput = YearUtil.astroYearToStr(this.currentYear)
@@ -103,17 +121,27 @@ export struct YearCalendarPage {
   @Builder
   headerSection() {
     Row() {
-      Column() {
-        Text(`${YearUtil.astroYearToStr(this.currentYear)} 年`)
-          .fontSize(AppDimens.FONT_TITLE)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(AppColors.ON_PRIMARY)
-        Text('农历年视图 (按朔月排列)')
-          .fontSize(AppDimens.FONT_SMALL)
+      Text(`${YearUtil.astroYearToStr(this.currentYear)} 年`)
+        .fontSize(AppDimens.FONT_TITLE)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(AppColors.ON_PRIMARY)
+      Blank()
+      // 农历干支纪年 + 生肖 (与月历顶部风格一致)
+      if (this.yearGZ.length > 0) {
+        Text('农历')
+          .fontSize(AppDimens.FONT_CAPTION)
           .fontColor(AppColors.ON_PRIMARY + 'B0')
+        Text(`${this.yearGZ}年`)
+          .fontSize(AppDimens.FONT_CAPTION)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(AppColors.ACCENT)
+          .margin({ left: 4 })
+        if (this.shengXiao.length > 0) {
+          Text(` · 生肖${this.shengXiao}`)
+            .fontSize(AppDimens.FONT_CAPTION)
+            .fontColor(AppColors.ON_PRIMARY + 'D8')
+        }
       }
-      .alignItems(HorizontalAlign.Start)
-      .layoutWeight(1)
     }
     .width('100%')
     .padding({
@@ -349,10 +377,18 @@ export struct YearCalendarPage {
     return `${YearUtil.astroYearToStr(m.solarYear)}-${this.pad2(m.solarMonth)}-${this.pad2(m.solarDay)}`
   }
 
+  // 参考 sxwnl nianLiHTML "历谱MM-DD(精确日 时:分:秒)":
+  //   现代(定气历)精确日==历谱日, 只显示 "MM-DD HH:MM:SS";
+  //   古代(1645前平气)精确交气日常差1天, 括号内补显精确公历日期+时刻.
   formatJieQiDate(jq: YearCalJieQi, m: YearCalMonth): string {
-    const y = YearUtil.astroYearToStr(m.solarYear)
-    const date = `${this.pad2(jq.solarMonth)}-${this.pad2(jq.solarDay)}`
-    return jq.time !== '' ? `${date} ${jq.time}` : `${y}-${date}`
+    const lipuDate = `${this.pad2(jq.solarMonth)}-${this.pad2(jq.solarDay)}`
+    if (jq.time === '') {
+      return `${YearUtil.astroYearToStr(m.solarYear)}-${lipuDate}`
+    }
+    const sameDay = jq.accMonth === jq.solarMonth && jq.accDay === jq.solarDay
+    return sameDay
+      ? `${lipuDate} ${jq.time}`
+      : `${lipuDate} (${this.pad2(jq.accMonth)}-${this.pad2(jq.accDay)} ${jq.time})`
   }
 
   pad2(n: number): string {

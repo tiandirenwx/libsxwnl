@@ -40,6 +40,10 @@ struct DayInfo {
     let lunarDayName: String
     let jieQiName: String
     let jieQiTime: String
+    // 历谱口径节气(整日表+QB, 对齐 sxwnl 网页版): 日历格子标签建议用此值,
+    // 古代(1645年前)与天文口径 jieQi 可能差 1 天; 精确时刻仍用 jieQiTime.
+    let lipuJieQi: Int    // -1 表示无, 0..23
+    let lipuJieQiName: String
     let shengXiao: String
     let constellationName: String
     let weekName: String
@@ -106,9 +110,11 @@ struct YearCalJieQi {
     let gz: String
     let solarMonth: Int
     let solarDay: Int
-    let time: String        // "HH:MM:SS"
+    let time: String        // "HH:MM:SS" 精确交气时刻(天文定气)
     let dayOffset: Int
     let dayName: String     // 月内日名 "初一"/"十五"...
+    let accMonth: Int       // 精确交气公历月 (古代可能与 solarMonth 差1天)
+    let accDay: Int         // 精确交气公历日
 }
 
 struct YearCalMonth {
@@ -303,7 +309,9 @@ final class SxwnlBridge {
                             solarDay: Int(j.solar_day),
                             time: extractString(from: j.time, capacity: 32),
                             dayOffset: Int(j.day_offset),
-                            dayName: extractString(from: j.day_name, capacity: 12)
+                            dayName: extractString(from: j.day_name, capacity: 12),
+                            accMonth: Int(j.acc_month),
+                            accDay: Int(j.acc_day)
                         ))
                     }
                 }
@@ -645,6 +653,8 @@ final class SxwnlBridge {
             lunarDayName: extractString(from: raw.lunar_day_name, capacity: 12),
             jieQiName: extractString(from: raw.jie_qi_name, capacity: 12),
             jieQiTime: extractString(from: raw.jie_qi_time, capacity: 32),
+            lipuJieQi: Int(raw.lipu_jie_qi),
+            lipuJieQiName: extractString(from: raw.lipu_jie_qi_name, capacity: 12),
             shengXiao: extractString(from: raw.sheng_xiao, capacity: 8),
             constellationName: extractString(from: raw.constellation_name, capacity: 12),
             weekName: extractString(from: raw.week_name, capacity: 16),
