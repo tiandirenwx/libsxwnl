@@ -11,6 +11,7 @@
 
 BaziBase::BaziBase(const SBaziInputPara &input)
 {
+
     mGender_ = input.gender;
     mUserName_ = input.name;
     mSUserJw_ = input.jw;
@@ -70,6 +71,8 @@ BaziBase::BaziBase(const SBaziInputPara &input)
     mTailJieQiJd_ = J2000;
     mHeadJieQiAstJd_ = J2000;
     mTailJieQiAstJd_ = J2000;
+    mMidQiJd_ = J2000;
+    mMidQiAstJd_ = J2000;
     mJyJd_ = J2000;
     arrayQiYunDelta_ = {0, 0, 0};
     arraySiZhu_ = {-1, -1, -1, -1, -1, -1, -1, -1};
@@ -99,9 +102,10 @@ void BaziBase::calcBaziPaiPan()
         calcPingQiPaiPan();
         break;
     }
+    mPaiPanDone_ = true;
 }
 
-std::array<long double, 4> BaziBase::bkCalc(int year, int month, LiFaType lifa)
+BaziBase::PingQiFrame BaziBase::bkCalc(int year, int month, LiFaType lifa)
 {
 	int yearTemp = year;
 	// 定冬至: 以冬至为气历起点, 公历 1–11 月归属上一年气历
@@ -115,59 +119,56 @@ std::array<long double, 4> BaziBase::bkCalc(int year, int month, LiFaType lifa)
 		yearTemp = year - 1;
 	}
 
-	// 使用SSQ类精确计算中气
+	// 使用SSQ类精确计算中气。
+	// 注意: calcY 会把 SSQ 单例的年份窗口挪走, 本函数不负责还原 —— 读 SSQ 的一方
+	// (Day::checkSSQ 等) 都会自行校验窗口是否覆盖目标日, 不覆盖就重算一次。
 	SSQ &ssq = SSQ::getInstance();
-	
-	long double pzq, zq, nzq;
-	
+
+	// ppzq: 上上个至点(仅用于求上一气年的间隔 kPrev)
+	long double ppzq, pzq, zq, nzq;
+
 	if (lifa == YuWuWeiZiPingLifa_DingXiaZhi)
 	{
-		// 定夏至：需要yearTemp年夏至、yearTemp+1年夏至、yearTemp+2年夏至
-		
-		// 1. yearTemp年夏至
-		// 计算yearTemp年年中基准，获取该年夏至(索引12)
-		int baseJD0 = int2((yearTemp - 2000.0) * 365.2422 + 180);
-		ssq.calcY(baseJD0);
-		std::vector<long double> vecZQ0 = ssq.getZhongQi();
-		pzq = qi_accurate2(vecZQ0[12], false, 120) + J2000;
-
-		// 2. yearTemp+1年夏至
-		int baseJD1 = int2((yearTemp + 1 - 2000.0) * 365.2422 + 180);
-		ssq.calcY(baseJD1);
-		std::vector<long double> vecZQ1 = ssq.getZhongQi();
-		zq = qi_accurate2(vecZQ1[12], false, 120) + J2000;
-		
-		// 3. yearTemp+2年夏至
-		int baseJD2 = int2((yearTemp + 2 - 2000.0) * 365.2422 + 180);
-		ssq.calcY(baseJD2);
-		std::vector<long double> vecZQ2 = ssq.getZhongQi();
-		nzq = qi_accurate2(vecZQ2[12], false, 120) + J2000;
+		// 定夏至: 夏至位于 vecZQ 索引 12, 一次 calcY 只能取到一个夏至,
+		// 故 yearTemp-1 / yearTemp / yearTemp+1 / yearTemp+2 各算一次。
+		auto xiaZhiOf = [&ssq](int y) -> long double {
+			ssq.calcY(int2((y - 2000.0) * 365.2422 + 180));
+			return qi_accurate2(ssq.getZhongQi()[12], false, 120) + J2000;
+		};
+		ppzq = xiaZhiOf(yearTemp - 1);
+		pzq  = xiaZhiOf(yearTemp);
+		zq   = xiaZhiOf(yearTemp + 1);
+		nzq  = xiaZhiOf(yearTemp + 2);
 	}
 	else
 	{
-		// 定冬至：需要yearTemp年冬至、yearTemp+1年冬至、yearTemp+2年冬至
-		// 计算yearTemp+1年的节气数据，vecZQ[0]是yearTemp年冬至
+		// 定冬至: 一次 calcY 的 vecZQ[0]/vecZQ[24] 就是相邻两个冬至, 三次即可覆盖四个。
+		int baseJD0 = int2((yearTemp - 2000.0) * 365.2422 + 180);
+		ssq.calcY(baseJD0);
+		std::vector<long double> vecZQ0 = ssq.getZhongQi();
+		ppzq = qi_accurate2(vecZQ0[0], false, 120) + J2000;  // yearTemp-1 年冬至
+
 		int baseJD1 = int2((yearTemp + 1 - 2000.0) * 365.2422 + 180);
 		ssq.calcY(baseJD1);
 		std::vector<long double> vecZQ1 = ssq.getZhongQi();
 		pzq = qi_accurate2(vecZQ1[0], false, 120) + J2000;  // yearTemp年冬至
 		zq = qi_accurate2(vecZQ1[24], false, 120) + J2000;  // yearTemp+1年冬至
-		
+
 		// 计算yearTemp+2年的节气数据，vecZQ[24]是yearTemp+2年冬至
 		int baseJD2 = int2((yearTemp + 2 - 2000.0) * 365.2422 + 180);
 		ssq.calcY(baseJD2);
 		std::vector<long double> vecZQ2 = ssq.getZhongQi();
 		nzq = qi_accurate2(vecZQ2[24], false, 120) + J2000; // yearTemp+2年冬至
 	}
-	
-	std::array<long double,4> z{};
-	z[0] = (zq - pzq) / 12.0; // k，当年平气间隔
-	// b: 定冬至=小寒, 定夏至=小暑 (中气后第一个节)
-	z[1] = pzq + z[0] / 2.0;
-	z[2] = (nzq - zq) / 12.0; // k1，下年平气间隔
-	z[3] = zq + z[2] / 2.0;   // b1: 下一年度首个节(小寒/小暑)
 
-	return z;
+	PingQiFrame f{};
+	f.pzq   = pzq;
+	f.kPrev = (pzq - ppzq) / 12.0; // 上一气年的节间隔
+	f.k     = (zq - pzq) / 12.0;   // 本气年的节间隔
+	f.b     = pzq + f.k / 2.0;     // 本气年首节: 定冬至=小寒, 定夏至=小暑
+	f.k1    = (nzq - zq) / 12.0;   // 下一气年的节间隔
+	f.b1    = zq + f.k1 / 2.0;     // 下一气年首节
+	return f;
 }
 
 // 计算立春，确保此函数中没有修改类的成员函数
@@ -201,37 +202,31 @@ long double BaziBase::calcLichun(int year) const
 std::tuple<int, double, double> BaziBase::calcJieQiTermsByPingQi()
 {
     int index = 0;
-    long double D = 0.0;
     auto year = mSolarYear_;
     auto month = mSolarMonth_;
 
-    auto array = bkCalc(year, month, mLifa_);
-    auto k = array[0], b = array[1], k1 = array[2], b1 = array[3];
-    auto daxue = b - k;
-    auto lichun = b + k;
+    auto f = bkCalc(year, month, mLifa_);
+    const auto kPrev = f.kPrev, k = f.k, b = f.b, k1 = f.k1, b1 = f.b1, pzq = f.pzq;
 
-    // 对于定夏至，b是小暑(7月)。如果mBdJd_在上半年，会小于b。
-    // 此时不能简单判定为 index=0 (即大雪/芒种)，而应该计算负偏移。
-    // 定冬至模式下 b是小寒(1月)，小于b的情况仅限于1月初(属于上年大雪)，index=0是合理的。
+    // index 的零点: 上一气年的最后一个节 —— 定冬至=大雪, 定夏至=芒种。
+    // 它位于 [ppzq, pzq] 这个气年里, 因此必须用 kPrev; 若借用本气年的 k,
+    // 会因相邻至点间隔逐年起伏(十几分钟量级)而使该节偏出几十秒,
+    // 造成"同一个节从 12 月侧和 1 月侧查到两个值"。
+    const long double baseNode = pzq - kPrev / 2.0;
+
     if (mBdJd_ < b)
     {
-        if (mLifa_ == YuWuWeiZiPingLifa_DingXiaZhi)
-        {
-            // 定夏至模式下，允许计算负 index
-            auto n = std::floor((mBdJd_ - b) / k);
-            D = k * n + b;
-            index = int(n) + 1;
-            mHeadJieQiJd_ = D;
-            mTailJieQiJd_ = D + k;
-        }
-        else
-        {
-            index = 0;
-            mHeadJieQiJd_ = b - k; // 大雪
-            mTailJieQiJd_ = b;     // 小寒
-        }
+        // 出生早于本气年首节 => 所在节属于上一气年, 整段用 kPrev 定位。
+        // 实际只会落在 baseNode 这一个节上 (定冬至=公历 1 月初小寒前,
+        // 定夏至=公历 7 月初小暑前), 这里仍按通式处理, 不对历法漂移做假设。
+        auto steps = std::ceil((baseNode - mBdJd_) / kPrev);
+        if (steps < 0) steps = 0;
+        index = -int(steps);
+        mHeadJieQiJd_ = baseNode - steps * kPrev;
+        mTailJieQiJd_ = (steps == 0) ? b : (mHeadJieQiJd_ + kPrev);
+        mMidQiJd_ = mHeadJieQiJd_ + kPrev / 2.0;
     }
-    else if (b <= mBdJd_ && mBdJd_ < b1)
+    else if (mBdJd_ < b1)
     {
         auto n = std::floor((mBdJd_ - b) / k);
         // 由于 k(当年) 与 k1(下年) 因日心运动不匀而有微差,
@@ -241,61 +236,55 @@ std::tuple<int, double, double> BaziBase::calcJieQiTermsByPingQi()
         // 此处把 n 限制在 [0,11]: 位于隙缝内视作 "第 12 个节 (index=12)
         // 已开始, 而月末应对齐下年首节 b1".
         if (n >= 12) n = 11;
-        D = k * n + b;
         index = int(n) + 1;
-        mHeadJieQiJd_ = D;
+        mHeadJieQiJd_ = b + k * n;
         // 若当前为最后一个节 (index=12), 月末节即下年首节 b1
         // (而非 b + 12k, 后者不精确, 会与 ELSE 分支的 head 存在数秒空隙).
-        mTailJieQiJd_ = (index == 12) ? b1 : (D + k);
+        mTailJieQiJd_ = (index == 12) ? b1 : (mHeadJieQiJd_ + k);
+        mMidQiJd_ = mHeadJieQiJd_ + k / 2.0;
     }
     else
     {
         auto n = std::floor((mBdJd_ - b1) / k1);
-        D = k1 * n + b1;
-        mHeadJieQiJd_ = D;
-        mTailJieQiJd_ = D + k1;
         index = 13 + int(n);
+        mHeadJieQiJd_ = b1 + k1 * n;
+        mTailJieQiJd_ = mHeadJieQiJd_ + k1;
+        mMidQiJd_ = mHeadJieQiJd_ + k1 / 2.0;
+    }
+
+    // 立春在气年内的相位(以至点为 0):
+    //   定冬至 冬至→小寒→大寒→立春, 立春 = pzq + 1.5k
+    //   定夏至 夏至起第 15 个气即立春,  立春 = pzq + 7.5k
+    // 用 k 而非 365.2422/12 等常数, 保证年柱与月柱在立春同一瞬间切换。
+    const long double lcPhase = (mLifa_ == YuWuWeiZiPingLifa_DingXiaZhi) ? 7.5L : 1.5L;
+    long double lichun = pzq + lcPhase * k;
+    if (mBdJd_ < lichun)
+    {
+        // 出生在本气年立春之前, 年柱归上一气年; 该立春同样落在上一气年, 用 kPrev。
+        lichun = pzq - (12.0L - lcPhase) * kPrev;
     }
 
     if (mIsAst_)
     {
         mHeadJieQiAstJd_ = JD::calcAST(mHeadJieQiJd_, mSUserJw_.J);
         mTailJieQiAstJd_ = JD::calcAST(mTailJieQiJd_, mSUserJw_.J);
+        mMidQiAstJd_ = JD::calcAST(mMidQiJd_, mSUserJw_.J);
     }
     else
     {
         mHeadJieQiAstJd_ = mHeadJieQiJd_;
         mTailJieQiAstJd_ = mTailJieQiJd_;
+        mMidQiAstJd_ = mMidQiJd_;
     }
 
-    // 针对定夏至的统一修正逻辑
+    // 定夏至以芒种(午月)为 index 零点, 定冬至以大雪(子月)为零点, 两者相差 6 个月。
+    // 下游月柱公式按子月基准写死, 故在此补偿。
     if (mLifa_ == YuWuWeiZiPingLifa_DingXiaZhi)
     {
-        // 1. 修正年界 lichun
-        //  以精确的 k(=平气节间隔) 计算, 避免使用 182.62/365.2422 常数
-        //  因常数与实际 12*k 存在秒级到分钟级差, 会导致年柱和月柱在
-        //  立春交接时不同步切换 (BC 及远古年份尤其明显).
-        //
-        //  b 是 小暑(yearTemp 年 7 月节). 立春 平气 位置:
-        //    * yearTemp 年立春   = b - 5k  (5 个节向前:小暑→立春 反向 5 步)
-        //    * yearTemp+1 年立春 = b + 7k  (7 个节向后)
-        //  index 是 raw index (n+1), 立春 raw index = 8, 即 n>=7.
-        if (index >= 8)
-        {
-            lichun = b + 7 * k;  // yearTemp+1 年立春 (与 D@n=7 对齐)
-        }
-        else
-        {
-            lichun = b - 5 * k;  // yearTemp 年立春
-        }
-
-        // 2. 修正月柱 index
-        // 定夏至以芒种(午月)为基准，普通法以大雪(子月)为基准。
-        // 两者相差 6 个月。外部公式通用，所以这里补偿 6 个月。
         index += 6;
     }
 
-    return std::make_tuple(index, daxue, lichun);
+    return std::make_tuple(index, (double)baseNode, (double)lichun);
 }
 
 void BaziBase::calcJiaoYunDate(bool flag)
@@ -360,9 +349,10 @@ void BaziBase::calcJieQiTermsByDingQi()
         vecZQ = ssq.getZhongQi();
     }
 
-    // vecZQ 内奇数索引 (1,3,5,...,23) 为 12 节.
+    // vecZQ 内奇数索引 (1,3,5,...,23) 为 12 节, 偶数索引为 12 中气.
     // 对每个节做 qi_accurate2 精化, 得到绝对 JD (加 J2000).
-    long double head = 0, tail = 0;
+    // 月首节取到索引 i 后, 紧随其后的 vecZQ[i+1] 即本月中气 (命宫论月用).
+    long double head = 0, tail = 0, mid = 0;
     bool haveHead = false, haveTail = false;
     for (int i = 1; i <= 23; i += 2)
     {
@@ -370,6 +360,7 @@ void BaziBase::calcJieQiTermsByDingQi()
         if (jNode <= mBdJd_)
         {
             head = jNode;
+            mid = qi_accurate2(vecZQ[i + 1], false, 120) + J2000;
             haveHead = true;
         }
         else
@@ -391,12 +382,11 @@ void BaziBase::calcJieQiTermsByDingQi()
             if (jNode <= mBdJd_)
             {
                 head = jNode;
+                mid = qi_accurate2(vecZQPrev[i + 1], false, 120) + J2000;
                 haveHead = true;
                 break;
             }
         }
-        // 恢复原 vecZQ 状态
-        ssq.calcY(int2(jdOff));
     }
     // mBdJd_ 晚于本期末尾节: 计算下一期
     if (!haveTail)
@@ -413,21 +403,23 @@ void BaziBase::calcJieQiTermsByDingQi()
                 break;
             }
         }
-        ssq.calcY(int2(jdOff));
     }
 
     mHeadJieQiJd_ = head;
     mTailJieQiJd_ = tail;
+    mMidQiJd_ = mid;
 
     if (mIsAst_)
     {
         mHeadJieQiAstJd_ = JD::calcAST(mHeadJieQiJd_, mSUserJw_.J);
         mTailJieQiAstJd_ = JD::calcAST(mTailJieQiJd_, mSUserJw_.J);
+        mMidQiAstJd_ = JD::calcAST(mMidQiJd_, mSUserJw_.J);
     }
     else
     {
         mHeadJieQiAstJd_ = mHeadJieQiJd_;
         mTailJieQiAstJd_ = mTailJieQiJd_;
+        mMidQiAstJd_ = mMidQiJd_;
     }
 }
 
@@ -495,11 +487,8 @@ void BaziBase::calcPingQiPaiPan()
 
     auto res = calcJieQiTermsByPingQi();
     auto index = std::get<0>(res);
+    // daxue: index 的零点(定冬至=大雪, 定夏至=芒种); lichun: 已保证 <= 出生时刻
     auto daxue = std::get<1>(res), lichun = std::get<2>(res);
-    if (mBdJd_ < lichun)
-    {
-        lichun -= 365;
-    }
     // 1984年立春作为起点
     lichun -= 2445735;
     auto nianZhu = int2(lichun / 365.2422 + 0.5) + 9000;
@@ -630,6 +619,29 @@ int BaziBase::getDaysAfterJie() const
     return days < 0 ? 0 : days;
 }
 
+std::string BaziBase::getTaiYuan() const
+{
+    if (!mPaiPanDone_) return "";
+    return bazi::taiYuanStr(arraySiZhu_[2], arraySiZhu_[3]);
+}
+
+std::string BaziBase::getMingGong() const
+{
+    if (!mPaiPanDone_) return "";
+    return bazi::mingGongStr(arraySiZhu_[0], arraySiZhu_[3], arraySiZhu_[7],
+                             isAfterZhongQi());
+}
+
+bool BaziBase::isAfterZhongQi() const
+{
+    long double bd = mIsAst_ ? mAstJd_ : mBdJd_;
+    long double mid = mIsAst_ ? mMidQiAstJd_ : mMidQiJd_;
+    long double jie = mIsAst_ ? mHeadJieQiAstJd_ : mHeadJieQiJd_;
+    // 中气未落在本月区间内(未排盘/异常)时按"未过中气"处理, 避免命宫误进一月。
+    if (!(mid > jie)) return false;
+    return bd >= mid;
+}
+
 std::string BaziBase::getSolarBirth() const
 {
     std::string s;
@@ -665,15 +677,24 @@ std::tuple<std::string, std::string, std::string> BaziBase::getLunarInfo() const
 {
     int solarYear = mSolarYear_;
 
-    std::string lySx = "『生肖』 " + std::string(ShengXiao[(solarYear - 1984 + 12000) % 12]);
-
     // 年号
     LunarYear ob(solarYear);
     std::string lyNh = ob.getNianHao();
 
-    // 干支，以立春为界
-    std::string lyGan = Gan[mSLunarDay_.lyGanIdx];
-    std::string lyZhi = Zhi[mSLunarDay_.lyZhiIdx];
+    // 干支纪年, 以立春为界。
+    // 必须与本盘年柱取同一个立春: mSLunarDay_ 来自 solar2Lunar2, 走的是"现代定气 +
+    // 历谱整日"的立春, 而年柱走的是所选历法(平气定冬至/定夏至/定气)的立春**时刻**。
+    // 两者在立春前后会差 1~2 天 —— 平气定冬至在 1900-2100 的 2/1~2/12 区间内有 16%
+    // 的日子对不上 —— 报告里同时出现"农历庚子年"和"年柱己亥"会自相矛盾。
+    // 排盘尚未执行时无年柱可用, 退回 solar2Lunar2 的结果。
+    int yGanIdx = mPaiPanDone_ ? arraySiZhu_[0] : mSLunarDay_.lyGanIdx;
+    int yZhiIdx = mPaiPanDone_ ? arraySiZhu_[1] : mSLunarDay_.lyZhiIdx;
+
+    // 生肖同样以年柱地支为准, 与 getShenXiao() 保持一致
+    std::string lySx = "『生肖』 " + std::string(ShengXiao[yZhiIdx]);
+
+    std::string lyGan = Gan[yGanIdx];
+    std::string lyZhi = Zhi[yZhiIdx];
 
     // 月信息 —— 统一走 sxwnl::lunarMonthName(见 lunar_month_name.h), 与年历/月历/日详情一致
     std::string lmMc = sxwnl::lunarMonthName(solarYear, mSLunarDay_.monthIdx + 1,
@@ -714,7 +735,7 @@ std::string BaziBase::getLifa() const
 
 std::string BaziBase::getDingQiType() const
 {
-    // 返回不含标签/"依据"前缀的定气方式简洁标签, 供简洁版"依据XXX。"文案直接拼接。
+    // 返回不含标签/"依据"前缀的定气方式简洁标签, 供经典版"依据XXX。"文案直接拼接。
     if (mLifa_ > LifaUnknown && mLifa_ < XianDaiNongLifa_DingQiFa)
     {
         return std::string(LifaList[mLifa_ - 1]) + "数据拟合";

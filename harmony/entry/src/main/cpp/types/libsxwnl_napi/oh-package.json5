@@ -2,5 +2,5 @@
   "name": "libsxwnl_napi.so",
   "types": "./index.d.ts",
   "version": "1.0.0",
-  "description": "寿星万年历 NAPI 原生模块类型声明"
+  "description": "禄命堂 NAPI 原生模块类型声明"
 }

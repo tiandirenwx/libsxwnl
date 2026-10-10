@@ -2,6 +2,9 @@
 cmake_minimum_required(VERSION 3.25)
 project(sxwnl)
 
+# 导出 compile_commands.json 供 clangd 使用
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # 设置C++标准
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

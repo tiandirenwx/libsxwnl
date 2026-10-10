@@ -209,6 +209,8 @@ struct BaziResult {
     let wuXingCount: [Int]               // [木火土金水] (含藏干)
     let wuXingStatus: [String]           // [旺/相/休/囚/死]
     let siLing: String                   // 司令
+    let taiYuan: String                  // 胎元: 月柱干进一位、支进三位
+    let mingGong: String                 // 命宫: 月时相加取支、年干五虎遁配干
     let liuNian: [LiuNianItem]           // 流年+小运列表 (从出生年起 120 年)
 
     // 按大运分组的流年: 与 daYunColumns 一一对应, 每桶 10 个.
@@ -512,12 +514,20 @@ final class SxwnlBridge {
             }
         }
 
-        // ── 司令 ──
+        // ── 司令 / 胎元 / 命宫 ──
         let siLing = cstr(sxwnl_bazi_get_si_ling(bazi))
+        let taiYuan = cstr(sxwnl_bazi_get_tai_yuan(bazi))
+        let mingGong = cstr(sxwnl_bazi_get_ming_gong(bazi))
 
-        // ── 流年 + 小运 列表 (默认起始为出生年, 取 120 年) ──
-        let lnStart: Int32 = parseYear(fromBirth: solarBirth) ?? 1900
-        let liuNian = fetchLiuNian(bazi, startYear: lnStart, count: 120)
+        // ── 当前大运区间的 10 年流年 + 小运, 与鸿蒙 napi_bazi.cpp 的 "liuNian" 同义 ──
+        //   早先这里取的是"出生年起 120 年", 且起始年靠 parseYear(fromBirth:) 从
+        //   solarBirth 里找 "…年" —— 而 getSolarBirth() 实际输出是
+        //   "『公历生日』 1984-02-10 …", 根本没有「年」字, 于是每次都静默回退到
+        //   兜底值 1900, 整列流年全错。现在直接用原生返回的大运起始年。
+        let curDyStart = currentDaYun?.startYear ?? 0
+        let liuNian = curDyStart > 0
+            ? fetchLiuNian(bazi, startYear: Int32(curDyStart), count: 10)
+            : []
 
         // ── 按大运分组的流年: 与 daYunColumns 一一对应, 每桶 10 个 ──
         //   对齐鸿蒙 NAPI 行为. 出错或 startYear 无效的桶用空列表占位,
@@ -541,6 +551,8 @@ final class SxwnlBridge {
             wuXingCount: wuXingCount,
             wuXingStatus: wuXingStatus,
             siLing: siLing,
+            taiYuan: taiYuan,
+            mingGong: mingGong,
             liuNian: liuNian,
             liuNianAll: liuNianAll
         )
@@ -565,18 +577,6 @@ final class SxwnlBridge {
                 xiaoYunShiShen: extractString(from: l.xiao_yun_shi_shen, capacity: 8)
             )
         }
-    }
-
-    /// "公历 2024年01月01日 ..." → 2024
-    private static func parseYear(fromBirth s: String) -> Int32? {
-        for tok in s.split(separator: " ") {
-            let str = String(tok)
-            if str.contains("年"),
-               let y = Int(str.split(separator: "年").first ?? "") {
-                return Int32(y)
-            }
-        }
-        return nil
     }
 
     private static func convertColumn(_ c: SxwnlBaziColumn) -> BaziColumn {

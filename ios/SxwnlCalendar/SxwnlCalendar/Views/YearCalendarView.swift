@@ -46,11 +46,14 @@ struct YearCalendarView: View {
                         ForEach(months, id: \.monthIdx) { m in
                             monthRow(m)
                         }
-                        Text("数据来源: 寿星万年历内核(C++) · 节气精确到秒")
-                            .font(.system(size: AppDimens.fontSmall))
-                            .foregroundColor(AppColors.textSecondary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, AppDimens.paddingLg)
+                        VStack(spacing: 2) {
+                            Text("数据来源: 基于寿星万年历内核(C++) · 节气精确到秒")
+                            Text("© 深圳市禄命文化传播有限公司")
+                        }
+                        .font(.system(size: AppDimens.fontSmall))
+                        .foregroundColor(AppColors.textSecondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, AppDimens.paddingLg)
                     }
                     .padding(.horizontal, AppDimens.paddingMd)
                     .padding(.top, AppDimens.paddingMd)

@@ -213,6 +213,8 @@ class BaziResult @JvmOverloads constructor(
     var wuXingCount: IntArray = IntArray(5),
     var     wuXingStatus: Array<String> = arrayOf("", "", "", "", ""),
     var siLing: String = "",
+    var taiYuan: String = "",   // 胎元: 月柱干进一位、支进三位
+    var mingGong: String = "",  // 命宫: 月时相加取支、年干五虎遁配干
     var liuNian: List<LiuNianItem> = emptyList(),
 
     // 按大运分组的流年: 与 daYunColumns 一一对应, 每桶 10 个流年.

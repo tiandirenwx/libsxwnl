@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">寿星万年历</string>
+    <string name="app_name">禄命堂</string>
+    <string name="copyright">© 深圳市禄命文化传播有限公司</string>
 </resources>

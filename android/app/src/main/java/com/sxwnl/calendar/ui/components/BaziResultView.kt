@@ -31,11 +31,15 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -55,7 +59,7 @@ import java.io.FileOutputStream
 
 // ════════════════════════════════════════════════════════════════
 //  BaziResultView — 与鸿蒙 components/BaziResultView.ets 对齐
-//  简洁版(宣纸命书) + 专业版(命盘表)
+//  经典版(宣纸命书) + 专业版(命盘表)
 // ════════════════════════════════════════════════════════════════
 
 data class BaziResultArg(
@@ -104,8 +108,10 @@ private fun zodiacDrawable(yearZhi: String): Int {
 // 宣纸命书专用毛笔字体 (与鸿蒙 BaziPage.ets 注册的 WenYue.otf 同源)
 private val WenYueFont = FontFamily(Font(R.font.wen_yue))
 
-private const val LabelW = 40
-private const val ColW = 54
+// 命盘表: 行首标签固定宽, 六柱等分剩余宽度。
+// 早先六柱用固定 54dp, 合计 40+6*54=364dp 超出常见 360dp 屏宽, 第六列(流年)被切掉,
+// 虽挂了 horizontalScroll 但半截的列看着就像渲染坏了 —— 改成等分后任何屏宽都不截断。
+private const val LabelW = 34
 private val ColTitles = listOf("年柱", "月柱", "日柱", "时柱", "大运", "流年")
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -128,12 +134,14 @@ fun BaziResultView(
 @Composable
 private fun ResultBody(arg: BaziResultArg, onDismiss: () -> Unit) {
     var proMode by remember { mutableStateOf(false) }
+    // 专业版选中的大运下标; -1 表示跟随命主当前大运
+    var selectedDaYunIdx by remember(arg) { mutableIntStateOf(-1) }
     val isFemale = arg.result.gender.contains("女")
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     // Compose 1.6 兼容方案: 用 android.graphics.Picture 录制 Composable.
     // 在待截图区域上挂 drawWithCache, 截图时直接 picture → Bitmap。
-    //   简洁版录制"命书卡片", 专业版录制"命盘表整体"。
+    //   经典版录制"命书卡片", 专业版录制"命盘表整体"。
     val simpleCardPicture = remember { Picture() }
     val proCardPicture = remember { Picture() }
 
@@ -142,7 +150,7 @@ private fun ResultBody(arg: BaziResultArg, onDismiss: () -> Unit) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(Dimens.paddingLg),
+                .padding(horizontal = Dimens.paddingLg, vertical = Dimens.paddingSm),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -164,34 +172,35 @@ private fun ResultBody(arg: BaziResultArg, onDismiss: () -> Unit) {
             Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(bottom = 24.dp)
+                .padding(bottom = 12.dp)
         ) {
             // 版本切换
             Row(
                 Modifier
-                    .padding(top = Dimens.paddingMd)
+                    .padding(top = Dimens.paddingSm)
                     .align(Alignment.CenterHorizontally)
                     .clip(RoundedCornerShape(17.dp))
                     .border(1.dp, DividerColor, RoundedCornerShape(17.dp))
             ) {
-                ToggleChip(label = "简洁版", active = !proMode,
+                ToggleChip(label = "经典版", active = !proMode,
                     cornerStart = true) { proMode = false }
                 ToggleChip(label = "专业版", active = proMode,
                     cornerEnd = true) { proMode = true }
             }
 
             if (proMode) {
-                // 把专业版命盘整体录制到 Picture 供"保存/分享"截图 (含背景)
+                // 把专业版命盘整体录制到 Picture 供"保存/分享"截图 (含背景)。
+                // 选中大运的下标提到这一层: 录制节点要靠它失效重录, 否则切大运后画面不刷新。
                 Column(
                     Modifier
                         .fillMaxWidth()
-                        .recordToPicture(proCardPicture)
+                        .recordToPicture(proCardPicture, selectedDaYunIdx)
                         .background(Background)
                 ) {
                     InfoBar(arg, isFemale)
                     PaiPanTable(arg)
                     SummaryBar(arg)
-                    LiuNianCard(arg)
+                    LiuNianCard(arg, selectedDaYunIdx) { selectedDaYunIdx = it }
                 }
                 SaveShareRow(
                     onSave = { saveBaziImage(ctx, scope, proCardPicture) },
@@ -238,7 +247,7 @@ private fun ToggleChip(
     }
 }
 
-// ════════════════════ 简洁版(宣纸命书) ════════════════════
+// ════════════════════ 经典版(宣纸命书) ════════════════════
 
 @Composable
 private fun SimpleCard(
@@ -260,7 +269,7 @@ private fun SimpleCard(
     }
 }
 
-// 保存为图片 + 分享到 (简洁版/专业版共用): 左"保存到相册", 右"分享到其它 app"
+// 保存为图片 + 分享到 (经典版/专业版共用): 左"保存到相册", 右"分享到其它 app"
 @Composable
 private fun SaveShareRow(onSave: () -> Unit, onShare: () -> Unit) {
     Row(
@@ -348,7 +357,7 @@ private fun SimpleReport(
             // 标题 (单行, 不占额外竖向空间)
             Row(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
                 Spacer(Modifier.weight(1f))
-                Text("☯ 八字命书",
+                Text("☯ 禄命堂八字命书",
                     fontSize = 12.sp, fontWeight = FontWeight.Bold, color = RedColor)
             }
 
@@ -576,24 +585,21 @@ private fun DaYunSimpleCell(arg: BaziResultArg, c: BaziColumn, modifier: Modifie
 private fun InfoBar(arg: BaziResultArg, isFemale: Boolean) {
     Column(
         Modifier
-            .padding(horizontal = Dimens.paddingMd, vertical = Dimens.paddingMd)
+            .padding(horizontal = Dimens.paddingMd, vertical = Dimens.paddingXs)
             .fillMaxWidth()
             .clip(RoundedCornerShape(Dimens.radiusMd))
             .background(Surface)
-            .padding(Dimens.paddingMd)
+            .padding(horizontal = Dimens.paddingMd, vertical = Dimens.paddingSm)
     ) {
         Text("${if (isFemale) "坤" else "乾"}  ${strip(arg.result.userName)}",
             fontSize = Dimens.fontSubtitle, fontWeight = FontWeight.Bold,
             color = Primary)
         Text("${strip(arg.result.shengXiao)}  ${strip(arg.result.age)}",
-            fontSize = Dimens.fontCaption, color = TextSecondary,
-            modifier = Modifier.padding(top = 2.dp))
+            fontSize = Dimens.fontCaption, color = TextSecondary, lineHeight = 14.sp)
         Text("公历 ${strip(arg.result.solarBirth)}",
-            fontSize = Dimens.fontCaption, color = TextSecondary,
-            modifier = Modifier.padding(top = 2.dp))
+            fontSize = Dimens.fontCaption, color = TextSecondary, lineHeight = 14.sp)
         Text("农历 ${strip(arg.result.lunarBirth)}",
-            fontSize = Dimens.fontCaption, color = TextSecondary,
-            modifier = Modifier.padding(top = 2.dp))
+            fontSize = Dimens.fontCaption, color = TextSecondary, lineHeight = 14.sp)
     }
 }
 
@@ -602,16 +608,15 @@ private fun PaiPanTable(arg: BaziResultArg) {
     val columns = buildAllColumns(arg)
     Column(
         Modifier
-            .padding(horizontal = Dimens.paddingMd, vertical = Dimens.paddingMd)
+            .padding(horizontal = Dimens.paddingMd, vertical = Dimens.paddingXs)
             .fillMaxWidth()
             .clip(RoundedCornerShape(Dimens.radiusMd))
             .background(Surface)
-            .padding(Dimens.paddingSm)
-            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 4.dp, vertical = 6.dp)
     ) {
         // header
         Row(
-            Modifier.height(28.dp).fillMaxWidth(),
+            Modifier.height(20.dp).fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(Modifier.width(LabelW.dp))
@@ -620,7 +625,9 @@ private fun PaiPanTable(arg: BaziResultArg) {
                     fontWeight = FontWeight.Bold,
                     color = if (i >= 4) Accent else Primary,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.width(ColW.dp))
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
+                    modifier = Modifier.weight(1f))
             }
         }
         ThinDivider(color = DividerColor)
@@ -630,26 +637,28 @@ private fun PaiPanTable(arg: BaziResultArg) {
                 if (i == 2) Primary else TextSecondary,
                 bold = i == 2)
         })
-        TableRow("天干", columns.map { ColorBox(it.gan, charColor(it.gan), 26.sp, true) })
-        TableRow("地支", columns.map { ColorBox(it.zhi, charColor(it.zhi), 26.sp, true) })
+        TableRow("天干", columns.map { ColorBox(it.gan, charColor(it.gan), 22.sp, true) })
+        TableRow("地支", columns.map { ColorBox(it.zhi, charColor(it.zhi), 22.sp, true) })
 
         Row(
-            Modifier.padding(vertical = 4.dp).fillMaxWidth(),
+            Modifier.padding(vertical = 3.dp).fillMaxWidth(),
             verticalAlignment = Alignment.Top
         ) {
             LabelCell("藏干")
             columns.forEach { c ->
                 Column(
-                    Modifier.width(ColW.dp),
+                    Modifier.weight(1f),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     c.cangGan.forEach { cg ->
                         Row {
-                            Text(cg.gan,
-                                fontSize = Dimens.fontSmall, color = charColor(cg.gan))
-                            Text(cg.shiShen,
-                                fontSize = Dimens.fontSmall, color = TextSecondary,
-                                modifier = Modifier.padding(start = 2.dp))
+                            Text(cg.gan, maxLines = 1, overflow = TextOverflow.Clip,
+                                fontSize = Dimens.fontSmall, lineHeight = 11.sp,
+                                color = charColor(cg.gan))
+                            Text(cg.shiShen, maxLines = 1, overflow = TextOverflow.Clip,
+                                fontSize = Dimens.fontSmall, lineHeight = 11.sp,
+                                color = TextSecondary,
+                                modifier = Modifier.padding(start = 1.dp))
                         }
                     }
                 }
@@ -663,18 +672,19 @@ private fun PaiPanTable(arg: BaziResultArg) {
 
         ThinDivider(color = DividerColor)
         Row(
-            Modifier.padding(vertical = 4.dp).fillMaxWidth(),
+            Modifier.padding(vertical = 3.dp).fillMaxWidth(),
             verticalAlignment = Alignment.Top
         ) {
             LabelCell("神煞")
             columns.forEach { c ->
                 Column(
-                    Modifier.width(ColW.dp),
+                    Modifier.weight(1f),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    c.shenSha.forEach { s ->
-                        Text(s, fontSize = 9.sp, color = TextSecondary,
-                            modifier = Modifier.padding(bottom = 1.dp))
+                    c.shenSha.filter { it.isNotBlank() }.take(8).forEach { s ->
+                        Text(s, fontSize = 8.sp, lineHeight = 10.sp, color = TextSecondary,
+                            textAlign = TextAlign.Center, maxLines = 1,
+                            overflow = TextOverflow.Clip)
                     }
                 }
             }
@@ -692,7 +702,7 @@ private data class ColorBox(
 @Composable
 private fun TableRow(label: String, cells: List<ColorBox>) {
     val firstFs = cells.firstOrNull()?.fontSize ?: TextUnit.Unspecified
-    val rowHeight = if (firstFs != TextUnit.Unspecified && firstFs.value > 20f) 44.dp else 26.dp
+    val rowHeight = if (firstFs != TextUnit.Unspecified && firstFs.value > 18f) 30.dp else 18.dp
     Row(
         Modifier.height(rowHeight).fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
@@ -704,7 +714,10 @@ private fun TableRow(label: String, cells: List<ColorBox>) {
                 fontWeight = if (box.bold) FontWeight.Bold else FontWeight.Normal,
                 color = box.color,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.width(ColW.dp))
+                maxLines = 1,
+                overflow = TextOverflow.Clip,
+                lineHeight = if (box.fontSize != TextUnit.Unspecified) box.fontSize else 12.sp,
+                modifier = Modifier.weight(1f))
         }
     }
 }
@@ -720,31 +733,20 @@ private fun LabelCell(label: String) {
 private fun SummaryBar(arg: BaziResultArg) {
     Column(
         Modifier
-            .padding(horizontal = Dimens.paddingMd, vertical = Dimens.paddingMd)
+            .padding(horizontal = Dimens.paddingMd, vertical = Dimens.paddingXs)
             .fillMaxWidth()
             .clip(RoundedCornerShape(Dimens.radiusMd))
             .background(Surface)
-            .padding(Dimens.paddingMd)
+            .padding(horizontal = Dimens.paddingMd, vertical = Dimens.paddingSm)
     ) {
-        Row(
-            Modifier.fillMaxWidth().padding(bottom = Dimens.paddingSm),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("司令", fontSize = Dimens.fontCaption, color = TextSecondary)
-            Text(arg.result.siLing,
-                fontSize = Dimens.fontBody, fontWeight = FontWeight.Bold,
-                color = Primary, modifier = Modifier.padding(start = 4.dp))
-            Spacer(Modifier.weight(1f))
-            Text(wuXingSummary(arg),
-                fontSize = Dimens.fontCaption, color = OnSurface)
-        }
+        SiLingRow(arg)
         Row(Modifier.fillMaxWidth()) {
             statusChips(arg).forEachIndexed { i, label ->
                 Box(
                     Modifier
                         .weight(1f)
                         .padding(end = if (i < 4) 4.dp else 0.dp)
-                        .height(28.dp)
+                        .height(24.dp)
                         .clip(RoundedCornerShape(Dimens.radiusSm))
                         .background(ElemColors.getOrElse(i) { Primary }),
                     contentAlignment = Alignment.Center
@@ -756,94 +758,182 @@ private fun SummaryBar(arg: BaziResultArg) {
     }
 }
 
+// 司令 / 命宫 / 胎元 + 含藏气。
+// 四段能在一行内排下就排一行; 排不下则把 命宫、胎元 整体挪到第二行,
+// 第一行保持 "司令 … 含藏气" 的原有版式。是否换行按实测文本宽度判定,
+// 因此不受字号、字体或干支字数变化的影响。
 @Composable
-private fun LiuNianCard(arg: BaziResultArg) {
-    val curDaYun = arg.result.currentDaYun?.startYear ?: -1
-    val curLN = arg.result.currentLiuNian?.startYear ?: -1
-    Column(
-        Modifier
-            .padding(horizontal = Dimens.paddingMd, vertical = Dimens.paddingMd)
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(Dimens.radiusLg))
-            .background(Surface)
-            .padding(Dimens.paddingLg)
-    ) {
-        Text("大运", fontSize = Dimens.fontSubtitle, fontWeight = FontWeight.Bold,
-            color = Primary,
-            modifier = Modifier.padding(bottom = Dimens.paddingSm))
-        Row(Modifier.horizontalScroll(rememberScrollState())) {
-            arg.result.daYunColumns.forEach { c ->
-                val isCur = c.startYear == curDaYun
-                Column(
-                    Modifier
-                        .width(48.dp)
-                        .padding(end = 4.dp)
-                        .clip(RoundedCornerShape(Dimens.radiusSm))
-                        .background(if (isCur) RedBg else Background)
-                        .padding(vertical = 4.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(c.ganShiShen, fontSize = 9.sp, color = TextSecondary)
-                    Text(c.gan, fontSize = 18.sp, fontWeight = FontWeight.Bold,
-                        color = charColor(c.gan))
-                    Text(c.zhi, fontSize = 18.sp, fontWeight = FontWeight.Bold,
-                        color = charColor(c.zhi))
-                    Text("${c.startYear}", fontSize = 9.sp, color = TextSecondary,
-                        modifier = Modifier.padding(top = 2.dp))
-                }
-            }
-        }
+private fun SiLingRow(arg: BaziResultArg) {
+    val extras = listOf("命宫" to arg.result.mingGong, "胎元" to arg.result.taiYuan)
+        .filter { it.second.isNotBlank() }
+    val wuXing = wuXingSummary(arg)
 
-        Text("流年 / 小运（当前大运）",
-            fontSize = Dimens.fontSubtitle, fontWeight = FontWeight.Bold,
-            color = Primary,
-            modifier = Modifier
-                .padding(top = Dimens.paddingMd, bottom = Dimens.paddingSm))
-        Row(Modifier.horizontalScroll(rememberScrollState())) {
-            arg.result.liuNian.forEach { it ->
-                LiuNianCell(it, curLN)
+    val measurer = rememberTextMeasurer()
+    val labelStyle = TextStyle(fontSize = Dimens.fontCaption)
+    val valueStyle = TextStyle(fontSize = Dimens.fontBody, fontWeight = FontWeight.Bold)
+
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(bottom = Dimens.paddingXs)) {
+        val density = LocalDensity.current
+        val availPx = with(density) { maxWidth.toPx() }
+        val labelGapPx = with(density) { 4.dp.toPx() }
+        val segGapPx = with(density) { 10.dp.toPx() }
+
+        fun textW(t: String, s: TextStyle) =
+            if (t.isEmpty()) 0f else measurer.measure(t, s).size.width.toFloat()
+        fun segW(label: String, value: String) =
+            textW(label, labelStyle) + labelGapPx + textW(value, valueStyle)
+
+        var oneLinePx = segW("司令", arg.result.siLing)
+        extras.forEach { (l, v) -> oneLinePx += segGapPx + segW(l, v) }
+        oneLinePx += segGapPx + textW(wuXing, labelStyle)
+        val fitsOneLine = extras.isEmpty() || oneLinePx <= availPx
+
+        Column(Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                LabeledGanZhi("司令", arg.result.siLing)
+                if (fitsOneLine) {
+                    extras.forEach { (l, v) ->
+                        Spacer(Modifier.width(10.dp))
+                        LabeledGanZhi(l, v)
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                Text(wuXing, fontSize = Dimens.fontCaption, color = OnSurface,
+                    maxLines = 1, overflow = TextOverflow.Clip)
+            }
+            if (!fitsOneLine) {
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    extras.forEachIndexed { i, (l, v) ->
+                        if (i > 0) Spacer(Modifier.width(12.dp))
+                        LabeledGanZhi(l, v)
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun LiuNianCell(item: LiuNianItem, curLN: Int) {
-    val isCur = item.year == curLN
+private fun LabeledGanZhi(label: String, value: String) {
+    Text(label, fontSize = Dimens.fontCaption, color = TextSecondary, maxLines = 1)
+    Text(value,
+        fontSize = Dimens.fontBody, fontWeight = FontWeight.Bold, color = Primary,
+        maxLines = 1, modifier = Modifier.padding(start = 4.dp))
+}
+
+@Composable
+private fun LiuNianCard(arg: BaziResultArg, selectedIdx: Int, onSelect: (Int) -> Unit) {
+    val dyCols = arg.result.daYunColumns
+    val curDaYun = arg.result.currentDaYun?.startYear ?: -1
+    val curLN = arg.result.currentLiuNian?.startYear ?: -1
+
+    val shownIdx = if (selectedIdx >= 0) selectedIdx
+                   else dyCols.indexOfFirst { it.startYear == curDaYun }.coerceAtLeast(0)
+
+    // 流年取所选大运那一桶(每桶 10 年)。早先这里直接铺 result.liuNian —— 那是一条
+    // 从出生年起算的长列表, 与标题"当前大运"对不上, 是本卡显示错年份的根因之一。
+    val shownLiuNian = arg.result.liuNianAll.getOrNull(shownIdx) ?: emptyList()
+    val shownDaYun = dyCols.getOrNull(shownIdx)
+
     Column(
         Modifier
-            .width(54.dp)
-            .padding(end = 4.dp)
+            .padding(horizontal = Dimens.paddingMd, vertical = Dimens.paddingXs)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(Dimens.radiusLg))
+            .background(Surface)
+            .padding(horizontal = Dimens.paddingMd, vertical = Dimens.paddingSm)
+    ) {
+        Text("大运（点击切换查看流年 / 小运）",
+            fontSize = Dimens.fontBody, fontWeight = FontWeight.Bold,
+            color = Primary,
+            modifier = Modifier.padding(bottom = 2.dp))
+        Row(Modifier.horizontalScroll(rememberScrollState())) {
+            dyCols.forEachIndexed { i, c ->
+                val isShown = i == shownIdx
+                Column(
+                    Modifier
+                        .width(46.dp)
+                        .padding(end = 4.dp)
+                        .clip(RoundedCornerShape(Dimens.radiusSm))
+                        .background(if (isShown) RedBg else Background)
+                        .clickable { onSelect(i) }
+                        .padding(vertical = 3.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(c.ganShiShen, fontSize = 9.sp, color = TextSecondary, maxLines = 1)
+                    Text(c.gan, fontSize = 17.sp, fontWeight = FontWeight.Bold,
+                        color = charColor(c.gan))
+                    Text(c.zhi, fontSize = 17.sp, fontWeight = FontWeight.Bold,
+                        color = charColor(c.zhi))
+                    Text("${c.startYear}", fontSize = 9.sp, maxLines = 1,
+                        color = if (c.startYear == curDaYun) Accent else TextSecondary)
+                }
+            }
+        }
+
+        Text(liuNianTitle(shownDaYun, curDaYun),
+            fontSize = Dimens.fontBody, fontWeight = FontWeight.Bold,
+            color = Primary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .padding(top = Dimens.paddingXs, bottom = 2.dp))
+        // 10 年等分铺满, 不再横向滚动 —— 否则窄屏右侧 3~4 年被切掉, 看着像没算出来。
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+            val highlightYear = if (shownDaYun?.startYear == curDaYun) curLN else -1
+            shownLiuNian.forEach { it ->
+                LiuNianCell(it, highlightYear, Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+/** "流年 / 小运（庚午 2022-2031 · 当前大运）"; 无大运数据时退回通用标题 */
+private fun liuNianTitle(shown: BaziColumn?, curDaYunStart: Int): String {
+    if (shown == null || shown.startYear <= 0) return "流年 / 小运"
+    val tag = if (shown.startYear == curDaYunStart) " · 当前大运" else ""
+    return "流年 / 小运（${shown.gan}${shown.zhi} ${shown.startYear}-${shown.startYear + 9}$tag）"
+}
+
+@Composable
+private fun LiuNianCell(item: LiuNianItem, curLN: Int, modifier: Modifier = Modifier) {
+    val isCur = item.year == curLN
+    Column(
+        modifier
+            .padding(horizontal = 1.dp)
             .clip(RoundedCornerShape(Dimens.radiusSm))
             .background(if (isCur) RedBg else Background)
-            .padding(vertical = 4.dp),
+            .padding(vertical = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("${item.year}", fontSize = 9.sp, color = TextSecondary)
-        Text("${item.age}岁", fontSize = 9.sp, color = LunarText)
-        Row(modifier = Modifier.padding(top = 2.dp)) {
-            Text(item.ganZhi,
-                fontSize = 13.sp, fontWeight = FontWeight.Bold, color = OnSurface)
-            Text(item.ganShiShen,
-                fontSize = 9.sp, color = Accent,
-                modifier = Modifier.padding(start = 1.dp))
-        }
-        Row {
-            Text(item.xiaoYun, fontSize = 11.sp, color = TextSecondary)
-            Text(item.xiaoYunShiShen,
-                fontSize = 9.sp, color = LunarText,
-                modifier = Modifier.padding(start = 1.dp))
-        }
+        Text("${item.year}", fontSize = 8.sp, lineHeight = 9.sp,
+            color = TextSecondary, maxLines = 1)
+        Text("${item.age}岁", fontSize = 8.sp, lineHeight = 9.sp,
+            color = LunarText, maxLines = 1)
+        Text(item.ganZhi, fontSize = 12.sp, lineHeight = 13.sp,
+            fontWeight = FontWeight.Bold, color = OnSurface, maxLines = 1)
+        Text(item.ganShiShen, fontSize = 8.sp, lineHeight = 9.sp,
+            color = Accent, maxLines = 1)
+        Text(item.xiaoYun, fontSize = 10.sp, lineHeight = 11.sp,
+            color = TextSecondary, maxLines = 1)
+        Text(item.xiaoYunShiShen, fontSize = 8.sp, lineHeight = 9.sp,
+            color = LunarText, maxLines = 1)
     }
 }
 
 // ─── 工具 ────────────────────────────────────────────────
 
+private fun emptyColumn() = BaziColumn()
+
 private fun buildAllColumns(arg: BaziResultArg): List<BaziColumn> {
-    val list = mutableListOf<BaziColumn>()
-    list += arg.result.columns
-    arg.result.currentDaYun?.let { list += it }
-    arg.result.currentLiuNian?.let { list += it }
+    // 表头固定 6 列。缺大运/流年时用空列占位, 避免 5 列数据对 6 列表头把最右列挤出屏外。
+    val list = arg.result.columns.toMutableList()
+    while (list.size < 4) list += emptyColumn()
+    list += arg.result.currentDaYun ?: emptyColumn()
+    list += arg.result.currentLiuNian ?: emptyColumn()
     return list
 }
 
@@ -889,7 +979,12 @@ private fun statusChips(arg: BaziResultArg): List<String> {
 // ── 录制 Composable 到 Picture (Compose 1.6 兼容, 不依赖 1.7 rememberGraphicsLayer) ──
 // 挂在待截图区域最外层; onDrawWithContent 内先录制到 picture 再回放到真实画布,
 // 因此背景/子内容都会被捕获, 且滚动容器中仍录制完整高度。
-private fun Modifier.recordToPicture(picture: Picture): Modifier = this.drawWithCache {
+// invalidateKey: 录制会把子树的绘制重定向进 Picture 再回放, 子树重组后本节点不会自动
+// 重新出图, 画面会停在旧帧(专业版点大运切流年时就撞上过)。把随交互变化的值传进来,
+// lambda 捕获变化 → 缓存块重建 → 重新录制。
+private fun Modifier.recordToPicture(picture: Picture, invalidateKey: Any? = null): Modifier =
+    this.drawWithCache {
+    @Suppress("UNUSED_EXPRESSION") invalidateKey
     val w = size.width.toInt().coerceAtLeast(1)
     val h = size.height.toInt().coerceAtLeast(1)
     onDrawWithContent {
@@ -938,7 +1033,7 @@ private fun shareBaziImage(ctx: Context, scope: CoroutineScope, picture: Picture
     }
 }
 
-// ── 保存图片 (简洁版命书) ─────────────────────────────────
+// ── 保存图片 (经典版命书) ─────────────────────────────────
 // Picture → Bitmap. Android 28+ 用 Bitmap.createBitmap(Picture) 一步到位;
 // 老版本回落到 Canvas.drawPicture() (需要 software canvas)。
 private fun pictureToBitmap(picture: Picture): Bitmap? {

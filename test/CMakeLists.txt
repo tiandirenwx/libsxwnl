@@ -21,8 +21,14 @@ set_target_properties(test_sxwnl PROPERTIES
 # 添加子目录 (平气/定气 节气边界测试)
 add_subdirectory(pingqi_dingqi)
 
+# 添加子目录 (八字排盘 规格符合性/黑盒不变量: 平气网格、真太阳时、SSQ 单例无副作用)
+add_subdirectory(bazi_invariants)
+
 # 添加子目录 (起运/交运 折算与日期验证)
 add_subdirectory(qiyun_jiaoyun)
+
+# 添加子目录 (胎元/命宫 典籍算例与端到端联动验证)
+add_subdirectory(taiyuan_minggong)
 
 # 添加子目录 (历谱口径节气 ob.Ljq 与天文口径对照验证)
 add_subdirectory(lipu_jieqi)

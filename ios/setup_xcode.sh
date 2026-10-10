@@ -1,6 +1,6 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════
-# 寿星万年历 - macOS/iOS Xcode 项目快速设置脚本
+# 禄命堂 - macOS/iOS Xcode 项目快速设置脚本
 # 用法:
 #   bash setup_xcode.sh           # 完整: 编译验证 + 同步源码链接
 #   bash setup_xcode.sh --link-only  # 仅同步 C++ 源码符号链接 (供 build_ios.sh 调用)
@@ -46,7 +46,7 @@ if [[ $LINK_ONLY -eq 1 ]]; then
 fi
 
 echo "╔══════════════════════════════════════════╗"
-echo "║  寿星万年历 - macOS 项目设置             ║"
+echo "║  禄命堂 - macOS 项目设置             ║"
 echo "╚══════════════════════════════════════════╝"
 echo ""
 

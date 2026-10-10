@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  寿星万年历 iOS 打包导出配置 (xcodebuild -exportArchive 用)
+  禄命堂 iOS 打包导出配置 (xcodebuild -exportArchive 用)
 
   method 取值:
     - development     真机内测 (默认, 适合 Ad-Hoc / 个人设备)

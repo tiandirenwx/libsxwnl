@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════
-# 寿星万年历 — 一键打包总入口 (Android + iOS)
+# 禄命堂 — 一键打包总入口 (Android + iOS)
 #
 # 用法:
 #   scripts/build_app.sh                    # 默认: android debug

@@ -289,10 +289,10 @@ int Day::getHuangdiYear()
 int Day::getLunarYear(bool chineseNewYearBoundary)
 {
     SSQ &SSQPtr = SSQ::getInstance();
-    if (this->lunar_lichun_year_ == 0 || this->lunar_jun_year_ == 0)
-    {
-        this->checkSSQ();
-    }
+    // 每次都要确认窗口: 本方法下面直接读 SSQ 的当前年份数据, 而单例窗口可能被
+    // 其它模块(如八字排盘)挪到别的年份; 只在首次调用时 checkSSQ 会读到错年的表。
+    // checkSSQ 在窗口已覆盖 d0 时不做任何计算, 所以无条件调用没有额外开销。
+    this->checkSSQ();
     std::vector<long double> vecZQ = SSQPtr.getZhongQi();
     std::vector<int> vecHS = SSQPtr.getHS();
     std::vector<int> vecYm = SSQPtr.getYm();
@@ -1038,6 +1038,7 @@ int Day::getLunarMonthDays()
 bool Day::isNextLunarMonthZheng()
 {
     this->checkLunarData();
+    this->checkSSQ();   // checkLunarData 有缓存短路, 这里直接读 SSQ 必须自己确认窗口
     SSQ &SSQPtr = SSQ::getInstance();
     std::vector<int> vecYm = SSQPtr.getYm();
     int next = this->lunar_month_idx_ + 1;

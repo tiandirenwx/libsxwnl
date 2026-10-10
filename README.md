@@ -1,9 +1,13 @@
 # libsxwnl
-## 寿星万年历 C++ 核心 + 三端原生 App（HarmonyOS / Android / iOS）
+## 禄命堂 — 寿星万年历 C++ 核心 + 三端原生 App（HarmonyOS / Android / iOS）
+
+> 产品名：**禄命堂**　|　运营主体：**深圳市禄命文化传播有限公司**
+>
+> `libsxwnl` / `sxwnl` / `sxtwl` 等标识符为历史代码命名，保持不变。
 
 ### 说明
 
-1. 本程序参考以下开源项目，仅限于兴趣研究，无任何商业化目的。
+1. 本程序参考以下开源项目：
    - [sxwnl](https://github.com/sxwnl/sxwnl.git)
    - [sxwnl-cpp](https://github.com/sxwnl/sxwnl-cpp.git)
    - [sxtwl_cpp](https://github.com/yuangu/sxtwl_cpp.git)

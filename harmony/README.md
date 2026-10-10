@@ -1,4 +1,4 @@
-# 寿星万年历 - 鸿蒙版 (HarmonyOS NEXT)
+# 禄命堂 - 鸿蒙版 (HarmonyOS NEXT)
 
 基于 libsxwnl C++ 核心库的鸿蒙原生万年历应用。
 

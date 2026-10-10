@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════
-# 寿星万年历 — Android 正式签名 keystore 生成脚本
+# 禄命堂 — Android 正式签名 keystore 生成脚本
 #
 # 用法:
 #   scripts/gen_android_keystore.sh                  # 交互式生成

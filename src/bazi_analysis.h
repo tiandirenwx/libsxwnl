@@ -46,6 +46,20 @@ std::string changSheng(int gan, int zhi);            // 十二长生, 例 "帝�
 std::array<int, 2> kongWang(int gan, int zhi);       // 旬空两地支索引
 std::string kongWangStr(int gan, int zhi);           // 旬空, 例 "寅卯"
 
+// ─── 胎元 / 命宫 ───
+// 胎元: 受胎之月。以月柱为准, 干进一位、支进三位。返回 {gan, zhi}, 非法返回 {-1,-1}。
+std::array<int, 2> taiYuan(int monthGan, int monthZhi);
+std::string taiYuanStr(int monthGan, int monthZhi); // 例 "丁巳"
+
+// 命宫: 以"寅一卯二顺着数, 月时相加君记之; 十四减去相加数, 十四不够用廿六"取地支,
+// 再由年干起五虎遁配天干。
+//   monthZhi  —— 八字月支(以"节"划月)
+//   hourZhi   —— 时支
+//   afterZhongQi —— 出生时刻是否已过本月"中气"; 命宫论月以中气为界, 过中气作次月计
+// 返回 {gan, zhi}, 非法返回 {-1,-1}。
+std::array<int, 2> mingGong(int yearGan, int monthZhi, int hourZhi, bool afterZhongQi);
+std::string mingGongStr(int yearGan, int monthZhi, int hourZhi, bool afterZhongQi);
+
 // 五行统计(木火土金水). includeCangGan=true 含藏干(含藏气)
 std::array<int, 5> wuXingCount(const std::array<int, 8> &sz, bool includeCangGan);
 

@@ -7,6 +7,7 @@ import { common } from '@kit.AbilityKit'
 import { photoAccessHelper } from '@kit.MediaLibraryKit'
 import { systemShare } from '@kit.ShareKit'
 import { uniformTypeDescriptor as utd } from '@kit.ArkData'
+import { UIContext } from '@kit.ArkUI'
 
 /** 结果页入参 (class 形式, 满足 ArkTS 严格类型规则) */
 export class BaziResultArg {
@@ -25,13 +26,13 @@ function emptyBaziResult(): BaziResult {
     shengXiao: '', age: '', lifa: '', dingQiType: '', ast: '', jieQi: '',
     qiYun: '', jiaoYun: '',
     columns: [], daYunColumns: [], wuXingCount: [], wuXingStatus: [],
-    siLing: '', liuNian: []
+    siLing: '', taiYuan: '', mingGong: '', liuNian: []
   } as BaziResult
 }
 
 /**
- * 八字排盘结果视图: 顶部切换 简洁版 / 专业版。
- * 简洁版严格参考"宣纸命书"排版(参考图四)。
+ * 八字排盘结果视图: 顶部切换 经典版 / 专业版。
+ * 经典版严格参考"宣纸命书"排版(参考图四)。
  */
 @Component
 export struct BaziResultView {
@@ -39,11 +40,13 @@ export struct BaziResultView {
   @State proMode: boolean = false
   /** 专业版"大运详情"选中的下标 (默认= 当前大运在 daYunColumns 里的位置) */
   @State selectedDaYunIdx: number = -1
+  /** 司令行的实测可用宽度 (vp), 由 onAreaChange 写入; 决定 命宫/胎元 是否另起一行 */
+  @State siLingAvailW: number = 0
 
   private readonly colTitles: string[] = ['年柱', '月柱', '日柱', '时柱', '大运', '流年']
   private readonly elemColors: string[] = ['#2E7D32', '#D32F2F', '#8D6E40', '#C9A227', '#1565C0']
   private readonly LABEL_W: number = 32
-  // 简洁版配色(宣纸命书: 墨色为主, 朱红高亮)
+  // 经典版配色(宣纸命书: 墨色为主, 朱红高亮)
   private readonly inkColor: string = '#3A2A1C'
   private readonly inkSoft: string = '#6B5640'
   private readonly redColor: string = '#C0392B'
@@ -80,7 +83,7 @@ export struct BaziResultView {
   @Builder
   versionToggle() {
     Row() {
-      Text('简洁版')
+      Text('经典版')
         .fontSize(AppDimens.FONT_CAPTION)
         .fontColor(!this.proMode ? AppColors.ON_PRIMARY : AppColors.TEXT_SECONDARY)
         .backgroundColor(!this.proMode ? AppColors.PRIMARY : AppColors.SURFACE)
@@ -95,7 +98,7 @@ export struct BaziResultView {
         .borderRadius({ topRight: 17, bottomRight: 17 })
         .onClick(() => { this.proMode = true })
     }
-    .margin({ top: AppDimens.PADDING_MD })
+    .margin({ top: AppDimens.PADDING_SM })
     .border({ width: 1, color: AppColors.DIVIDER, radius: 17 })
   }
 
@@ -150,17 +153,25 @@ export struct BaziResultView {
     return r
   }
 
+  emptyColumn(): BaziColumn {
+    return {
+      gan: '', zhi: '', ganShiShen: '', nayin: '', xingYun: '',
+      ziZuo: '', kongWang: '', cangGan: [], shenSha: [], startYear: 0
+    }
+  }
+
   buildColumns(): BaziColumn[] {
     const list: BaziColumn[] = []
     if (this.arg.result.columns !== undefined) {
       for (let i = 0; i < this.arg.result.columns.length; i++) list.push(this.arg.result.columns[i])
     }
-    if (this.arg.result.currentDaYun !== undefined) list.push(this.arg.result.currentDaYun)
-    if (this.arg.result.currentLiuNian !== undefined) list.push(this.arg.result.currentLiuNian)
+    while (list.length < 4) list.push(this.emptyColumn())
+    list.push(this.arg.result.currentDaYun !== undefined ? this.arg.result.currentDaYun : this.emptyColumn())
+    list.push(this.arg.result.currentLiuNian !== undefined ? this.arg.result.currentLiuNian : this.emptyColumn())
     return list
   }
 
-  // ════════════════════ 简洁版(宣纸命书) ════════════════════
+  // ════════════════════ 经典版(宣纸命书) ════════════════════
   @Builder
   simpleCard() {
     Column() {
@@ -170,24 +181,28 @@ export struct BaziResultView {
     .width('100%').alignItems(HorizontalAlign.Center)
   }
 
-  // 保存为图片 + 分享到 (简洁版/专业版共用)
+  // 保存为图片 + 分享到 (经典版/专业版共用)
   //  · 左: 安全控件 SaveButton, 点击后系统授予一次性写相册授权, 无需声明/申请权限;
   //  · 右: 普通按钮调起系统分享面板, 分享到其它 app。
   @Builder
   saveShareRow(snapshotId: string) {
     Row() {
-      SaveButton({ icon: SaveIconStyle.FULL_FILLED, text: SaveDescription.SAVE_IMAGE, buttonType: ButtonType.Capsule })
-        .layoutWeight(1).height(40).fontSize(AppDimens.FONT_BODY).fontWeight(FontWeight.Medium)
-        .fontColor(AppColors.PRIMARY_DARK).iconColor(AppColors.PRIMARY_DARK)
-        .backgroundColor(AppColors.ACCENT)
-        .borderRadius(AppDimens.BORDER_RADIUS_LG)
-        .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
-          if (result === SaveButtonOnClickResult.SUCCESS) {
-            this.saveImageToGallery(snapshotId)
-          } else {
-            this.toast('没有相册写入授权')
-          }
-        })
+      // SaveButton 是安全控件, 其属性集(SecurityComponentMethod)不含 layoutWeight 这类
+      // 通用布局属性, 直接挂会编译不过。改由外层 Row 承担等分, 控件自身撑满即可。
+      Row() {
+        SaveButton({ icon: SaveIconStyle.FULL_FILLED, text: SaveDescription.SAVE_IMAGE, buttonType: ButtonType.Capsule })
+          .width('100%').height(40).fontSize(AppDimens.FONT_BODY).fontWeight(FontWeight.Medium)
+          .fontColor(AppColors.PRIMARY_DARK).iconColor(AppColors.PRIMARY_DARK)
+          .backgroundColor(AppColors.ACCENT)
+          .borderRadius(AppDimens.BORDER_RADIUS_LG)
+          .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
+            if (result === SaveButtonOnClickResult.SUCCESS) {
+              this.saveImageToGallery(snapshotId)
+            } else {
+              this.toast('没有相册写入授权')
+            }
+          })
+      }.layoutWeight(1)
       Button('分享到')
         .layoutWeight(1).height(40).fontSize(AppDimens.FONT_BODY).fontWeight(FontWeight.Medium)
         .fontColor(AppColors.ON_PRIMARY).backgroundColor(AppColors.PRIMARY)
@@ -257,7 +272,7 @@ export struct BaziResultView {
           // 抬头品牌 (单行, 不占额外竖向空间)
           Row() {
             Blank()
-            Text('☯ 八字命书').fontSize(12).fontColor(this.redColor).fontWeight(FontWeight.Bold)
+            Text('☯ 禄命堂八字命书').fontSize(12).fontColor(this.redColor).fontWeight(FontWeight.Bold)
           }.width('100%').margin({ bottom: 4 })
 
           // ── 命主信息 (姓名/性别/生肖/年龄 合并为一行) ──
@@ -502,15 +517,15 @@ export struct BaziResultView {
       Text(`${this.arg.result.gender !== undefined && this.arg.result.gender.indexOf('女') >= 0 ? '坤' : '乾'}  ${this.strip(this.arg.result.userName)}`)
         .fontSize(AppDimens.FONT_SUBTITLE).fontWeight(FontWeight.Bold).fontColor(AppColors.PRIMARY)
       Text(`${this.strip(this.arg.result.shengXiao)}  ${this.strip(this.arg.result.age)}`)
-        .fontSize(AppDimens.FONT_CAPTION).fontColor(AppColors.TEXT_SECONDARY).margin({ top: 2 })
+        .fontSize(AppDimens.FONT_CAPTION).fontColor(AppColors.TEXT_SECONDARY)
       Text(`公历 ${this.strip(this.arg.result.solarBirth)}`)
-        .fontSize(AppDimens.FONT_CAPTION).fontColor(AppColors.TEXT_SECONDARY).margin({ top: 2 })
+        .fontSize(AppDimens.FONT_CAPTION).fontColor(AppColors.TEXT_SECONDARY)
       Text(`农历 ${this.strip(this.arg.result.lunarBirth)}`)
-        .fontSize(AppDimens.FONT_CAPTION).fontColor(AppColors.TEXT_SECONDARY).margin({ top: 2 })
+        .fontSize(AppDimens.FONT_CAPTION).fontColor(AppColors.TEXT_SECONDARY)
     }
     .width('100%').alignItems(HorizontalAlign.Start)
-    .padding(AppDimens.PADDING_MD)
-    .margin({ left: AppDimens.PADDING_MD, right: AppDimens.PADDING_MD, top: AppDimens.PADDING_MD })
+    .padding({ left: AppDimens.PADDING_MD, right: AppDimens.PADDING_MD, top: 6, bottom: 6 })
+    .margin({ left: AppDimens.PADDING_MD, right: AppDimens.PADDING_MD, top: AppDimens.PADDING_XS })
     .backgroundColor(AppColors.SURFACE).borderRadius(AppDimens.BORDER_RADIUS_MD)
   }
 
@@ -530,8 +545,8 @@ export struct BaziResultView {
       this.shenShaRow()
     }
     .width('100%').alignItems(HorizontalAlign.Center)
-    .padding(AppDimens.PADDING_SM)
-    .margin({ left: AppDimens.PADDING_MD, right: AppDimens.PADDING_MD, top: AppDimens.PADDING_MD })
+    .padding({ left: 4, right: 4, top: 6, bottom: 6 })
+    .margin({ left: AppDimens.PADDING_MD, right: AppDimens.PADDING_MD, top: AppDimens.PADDING_XS })
     .backgroundColor(AppColors.SURFACE).borderRadius(AppDimens.BORDER_RADIUS_MD)
   }
 
@@ -551,7 +566,7 @@ export struct BaziResultView {
           .fontWeight(FontWeight.Bold).textAlign(TextAlign.Center).layoutWeight(1)
       })
     }
-    .width('100%').height(28).alignItems(VerticalAlign.Center)
+    .width('100%').height(20).alignItems(VerticalAlign.Center)
     .border({ width: { bottom: 1 }, color: AppColors.DIVIDER })
   }
 
@@ -566,7 +581,7 @@ export struct BaziResultView {
           .textAlign(TextAlign.Center).layoutWeight(1)
       })
     }
-    .width('100%').height(26).alignItems(VerticalAlign.Center)
+    .width('100%').height(18).alignItems(VerticalAlign.Center)
   }
 
   @Builder
@@ -574,11 +589,11 @@ export struct BaziResultView {
     Row() {
       this.cell('天干')
       ForEach(this.buildColumns(), (c: BaziColumn) => {
-        Text(c.gan).fontSize(24).fontWeight(FontWeight.Bold)
+        Text(c.gan).fontSize(22).fontWeight(FontWeight.Bold)
           .fontColor(this.charColor(c.gan)).textAlign(TextAlign.Center).layoutWeight(1)
       })
     }
-    .width('100%').height(40).alignItems(VerticalAlign.Center)
+    .width('100%').height(30).alignItems(VerticalAlign.Center)
   }
 
   @Builder
@@ -586,11 +601,11 @@ export struct BaziResultView {
     Row() {
       this.cell('地支')
       ForEach(this.buildColumns(), (c: BaziColumn) => {
-        Text(c.zhi).fontSize(24).fontWeight(FontWeight.Bold)
+        Text(c.zhi).fontSize(22).fontWeight(FontWeight.Bold)
           .fontColor(this.charColor(c.zhi)).textAlign(TextAlign.Center).layoutWeight(1)
       })
     }
-    .width('100%').height(40).alignItems(VerticalAlign.Center)
+    .width('100%').height(30).alignItems(VerticalAlign.Center)
   }
 
   @Builder
@@ -609,7 +624,7 @@ export struct BaziResultView {
         .layoutWeight(1).alignItems(HorizontalAlign.Center).justifyContent(FlexAlign.Center)
       })
     }
-    .width('100%').alignItems(VerticalAlign.Top).padding({ top: 4, bottom: 4 })
+    .width('100%').alignItems(VerticalAlign.Top).padding({ top: 3, bottom: 3 })
   }
 
   rowValues(field: number): string[] {
@@ -634,7 +649,7 @@ export struct BaziResultView {
           .textAlign(TextAlign.Center).layoutWeight(1)
       })
     }
-    .width('100%').height(24).alignItems(VerticalAlign.Center)
+    .width('100%').height(18).alignItems(VerticalAlign.Center)
     .border({ width: { top: 0.5 }, color: AppColors.DIVIDER })
   }
 
@@ -644,41 +659,114 @@ export struct BaziResultView {
       this.cell('神煞')
       ForEach(this.buildColumns(), (c: BaziColumn) => {
         Column() {
-          ForEach(c.shenSha, (s: string) => {
-            Text(s).fontSize(9).fontColor(AppColors.TEXT_SECONDARY).margin({ bottom: 1 })
+          ForEach(this.shenShaShown(c), (s: string) => {
+            Text(s).fontSize(8).fontColor(AppColors.TEXT_SECONDARY)
           })
         }
         .layoutWeight(1).alignItems(HorizontalAlign.Center)
       })
     }
-    .width('100%').alignItems(VerticalAlign.Top).padding({ top: 4, bottom: 4 })
+    .width('100%').alignItems(VerticalAlign.Top).padding({ top: 3, bottom: 3 })
     .border({ width: { top: 0.5 }, color: AppColors.DIVIDER })
+  }
+
+  @Builder
+  labeledGanZhi(label: string, value: string) {
+    Row() {
+      Text(label).fontSize(AppDimens.FONT_CAPTION).fontColor(AppColors.TEXT_SECONDARY).maxLines(1)
+      Text(value).fontSize(AppDimens.FONT_BODY).fontWeight(FontWeight.Bold)
+        .fontColor(AppColors.PRIMARY).margin({ left: 4 }).maxLines(1)
+    }
+  }
+
+  // 司令 / 命宫 / 胎元 + 含藏气。
+  // 四段能在一行内排下就排一行; 排不下则把 命宫、胎元 整体挪到第二行,
+  // 第一行保持 "司令 … 含藏气" 的原有版式。
+  // 可用宽度由 onAreaChange 实测, 各段宽度由 MeasureText 实测, 故不受
+  // 字号、字体或干支字数变化的影响。
+  @Builder
+  siLingRow() {
+    Column() {
+      Row() {
+        this.labeledGanZhi('司令', this.arg.result.siLing)
+        if (this.siLingFitsOneLine()) {
+          ForEach(this.headerExtras(), (e: string[]) => {
+            Row() { this.labeledGanZhi(e[0], e[1]) }.margin({ left: 10 })
+          }, (e: string[]) => e[0])
+        }
+        Blank()
+        Text(this.wuXingSummary()).fontSize(AppDimens.FONT_CAPTION)
+          .fontColor(AppColors.ON_SURFACE).maxLines(1)
+      }
+      .width('100%')
+      .onAreaChange((_o: Area, n: Area) => {
+        const w: number = Number(n.width)
+        if (w > 0 && Math.abs(w - this.siLingAvailW) > 0.5) this.siLingAvailW = w
+      })
+
+      if (!this.siLingFitsOneLine()) {
+        Row() {
+          ForEach(this.headerExtras(), (e: string[], i: number) => {
+            Row() { this.labeledGanZhi(e[0], e[1]) }.margin({ left: i > 0 ? 12 : 0 })
+          }, (e: string[]) => e[0])
+          Blank()
+        }
+        .width('100%').margin({ top: 2 })
+      }
+    }
+    .width('100%').margin({ bottom: AppDimens.PADDING_XS })
+  }
+
+  // 待挂在司令行上的附加段: 命宫 / 胎元 (内核未给出时自动省略)
+  headerExtras(): string[][] {
+    const out: string[][] = []
+    const mg: string = this.arg.result.mingGong !== undefined ? this.arg.result.mingGong : ''
+    const ty: string = this.arg.result.taiYuan !== undefined ? this.arg.result.taiYuan : ''
+    if (mg.length > 0) out.push(['命宫', mg])
+    if (ty.length > 0) out.push(['胎元', ty])
+    return out
+  }
+
+  private textW(s: string, fontSize: number): number {
+    if (s.length === 0) return 0
+    const ctx: UIContext = this.getUIContext()
+    return ctx.px2vp(ctx.getMeasureUtils().measureText({ textContent: s, fontSize: `${fontSize}fp` }))
+  }
+
+  siLingFitsOneLine(): boolean {
+    const extras: string[][] = this.headerExtras()
+    if (extras.length === 0) return true
+    if (this.siLingAvailW <= 0) return false // 首帧未测得宽度: 先按两行, 避免截断闪烁
+    const LABEL_GAP: number = 4
+    const SEG_GAP: number = 10
+    let need: number =
+      this.textW('司令', AppDimens.FONT_CAPTION) + LABEL_GAP +
+      this.textW(this.arg.result.siLing, AppDimens.FONT_BODY)
+    for (let i = 0; i < extras.length; i++) {
+      need += SEG_GAP + this.textW(extras[i][0], AppDimens.FONT_CAPTION) +
+              LABEL_GAP + this.textW(extras[i][1], AppDimens.FONT_BODY)
+    }
+    need += SEG_GAP + this.textW(this.wuXingSummary(), AppDimens.FONT_CAPTION)
+    return need <= this.siLingAvailW
   }
 
   @Builder
   summaryBar() {
     Column() {
-      Row() {
-        Text('司令').fontSize(AppDimens.FONT_CAPTION).fontColor(AppColors.TEXT_SECONDARY)
-        Text(this.arg.result.siLing).fontSize(AppDimens.FONT_BODY).fontWeight(FontWeight.Bold)
-          .fontColor(AppColors.PRIMARY).margin({ left: 4 })
-        Blank()
-        Text(this.wuXingSummary()).fontSize(AppDimens.FONT_CAPTION).fontColor(AppColors.ON_SURFACE)
-      }
-      .width('100%').margin({ bottom: AppDimens.PADDING_SM })
+      this.siLingRow()
 
       Row() {
         ForEach(this.statusChips(), (item: string, i: number) => {
           Text(item).fontSize(AppDimens.FONT_CAPTION).fontColor(AppColors.ON_PRIMARY)
-            .textAlign(TextAlign.Center).layoutWeight(1).height(28)
+            .textAlign(TextAlign.Center).layoutWeight(1).height(24)
             .backgroundColor(this.elemColors[i]).borderRadius(AppDimens.BORDER_RADIUS_SM)
             .margin({ right: i < 4 ? 4 : 0 })
         })
       }
       .width('100%')
     }
-    .width('100%').padding(AppDimens.PADDING_MD)
-    .margin({ left: AppDimens.PADDING_MD, right: AppDimens.PADDING_MD, top: AppDimens.PADDING_MD })
+    .width('100%').padding({ left: AppDimens.PADDING_MD, right: AppDimens.PADDING_MD, top: 6, bottom: 6 })
+    .margin({ left: AppDimens.PADDING_MD, right: AppDimens.PADDING_MD, top: AppDimens.PADDING_XS })
     .backgroundColor(AppColors.SURFACE).borderRadius(AppDimens.BORDER_RADIUS_MD)
   }
 
@@ -695,6 +783,15 @@ export struct BaziResultView {
     const names: string[] = ['木', '火', '土', '金', '水']
     const out: string[] = []
     for (let i = 0; i < 5; i++) out.push(`${names[i]}${this.arg.result.wuXingStatus[i]}`)
+    return out
+  }
+
+  shenShaShown(c: BaziColumn): string[] {
+    const out: string[] = []
+    if (c.shenSha === undefined) return out
+    for (let i = 0; i < c.shenSha.length && out.length < 8; i++) {
+      if (c.shenSha[i].length > 0) out.push(c.shenSha[i])
+    }
     return out
   }
 
@@ -729,8 +826,8 @@ export struct BaziResultView {
   liuNianCard() {
     Column() {
       Text('大运 (点击切换查看流年 / 小运)')
-        .fontSize(AppDimens.FONT_SUBTITLE).fontWeight(FontWeight.Bold)
-        .fontColor(AppColors.PRIMARY).width('100%').margin({ bottom: AppDimens.PADDING_SM })
+        .fontSize(AppDimens.FONT_BODY).fontWeight(FontWeight.Bold)
+        .fontColor(AppColors.PRIMARY).width('100%').margin({ bottom: 2 })
       Scroll() {
         Row() {
           ForEach(this.arg.result.daYunColumns, (c: BaziColumn, i: number) => {
@@ -754,25 +851,22 @@ export struct BaziResultView {
       .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).width('100%')
 
       Text(this.liuNianTitle())
-        .fontSize(AppDimens.FONT_SUBTITLE).fontWeight(FontWeight.Bold)
+        .fontSize(AppDimens.FONT_BODY).fontWeight(FontWeight.Bold)
         .fontColor(AppColors.PRIMARY).width('100%')
-        .margin({ top: AppDimens.PADDING_MD, bottom: AppDimens.PADDING_SM })
+        .maxLines(1)
+        .margin({ top: AppDimens.PADDING_XS, bottom: 2 })
       // 10 年流年: 等分宽度展开, 无需横向滚动
       Row() {
         ForEach(this.curLiuNianList(), (item: LiuNianItem) => {
           Column() {
-            Text(`${item.year}`).fontSize(9).fontColor(AppColors.TEXT_SECONDARY)
-            Text(`${item.age}岁`).fontSize(9).fontColor(AppColors.LUNAR_TEXT)
-            Column() {
-              Text(item.ganZhi).fontSize(14).fontWeight(FontWeight.Bold).fontColor(AppColors.ON_SURFACE)
-              Text(item.ganShiShen).fontSize(9).fontColor(AppColors.ACCENT)
-            }.margin({ top: 2 }).alignItems(HorizontalAlign.Center)
-            Column() {
-              Text(item.xiaoYun).fontSize(11).fontColor(AppColors.TEXT_SECONDARY)
-              Text(item.xiaoYunShiShen).fontSize(9).fontColor(AppColors.LUNAR_TEXT)
-            }.margin({ top: 1 }).alignItems(HorizontalAlign.Center)
+            Text(`${item.year}`).fontSize(8).fontColor(AppColors.TEXT_SECONDARY)
+            Text(`${item.age}岁`).fontSize(8).fontColor(AppColors.LUNAR_TEXT)
+            Text(item.ganZhi).fontSize(12).fontWeight(FontWeight.Bold).fontColor(AppColors.ON_SURFACE)
+            Text(item.ganShiShen).fontSize(8).fontColor(AppColors.ACCENT)
+            Text(item.xiaoYun).fontSize(10).fontColor(AppColors.TEXT_SECONDARY)
+            Text(item.xiaoYunShiShen).fontSize(8).fontColor(AppColors.LUNAR_TEXT)
           }
-          .layoutWeight(1).padding({ top: 4, bottom: 4 }).margin({ right: 2 })
+          .layoutWeight(1).padding({ top: 2, bottom: 2 }).margin({ right: 1 })
           .alignItems(HorizontalAlign.Center)
           .backgroundColor((this.isSelectedCurDaYun() && item.year === this.curLiuNianYear())
             ? this.redBg : AppColors.BACKGROUND)
@@ -781,8 +875,8 @@ export struct BaziResultView {
       }
       .width('100%').alignItems(VerticalAlign.Top)
     }
-    .width('100%').padding(AppDimens.PADDING_LG)
-    .margin({ left: AppDimens.PADDING_MD, right: AppDimens.PADDING_MD, top: AppDimens.PADDING_MD })
+    .width('100%').padding({ left: AppDimens.PADDING_SM, right: AppDimens.PADDING_SM, top: 6, bottom: 6 })
+    .margin({ left: AppDimens.PADDING_MD, right: AppDimens.PADDING_MD, top: AppDimens.PADDING_XS })
     .backgroundColor(AppColors.SURFACE).borderRadius(AppDimens.BORDER_RADIUS_LG)
     .shadow({ radius: 8, color: AppColors.CARD_SHADOW_COLOR, offsetY: 2 })
   }

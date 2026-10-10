@@ -102,8 +102,6 @@ object CalendarRepository {
 
     private fun buildResult(handle: Long): BaziResult {
         val solarBirth = SxwnlNative.baziGetSolarBirth(handle)
-        // 起始年: 从 solarBirth 取数, 失败用 1900
-        val startYear = parseYearFrom(solarBirth) ?: 1900
         return BaziResult().apply {
             userName    = SxwnlNative.baziGetUserName(handle)
             gender      = SxwnlNative.baziGetGender(handle)
@@ -119,6 +117,8 @@ object CalendarRepository {
             qiYun       = SxwnlNative.baziGetQiYun(handle)
             jiaoYun     = SxwnlNative.baziGetJiaoYun(handle)
             siLing      = SxwnlNative.baziGetSiLing(handle)
+            taiYuan     = SxwnlNative.baziGetTaiYuan(handle)
+            mingGong    = SxwnlNative.baziGetMingGong(handle)
             columns     = SxwnlNative.baziGetColumns(handle)?.toList() ?: emptyList()
             currentDaYun   = SxwnlNative.baziGetCurrentDaYun(handle)
             currentLiuNian = SxwnlNative.baziGetCurrentLiuNian(handle)
@@ -127,7 +127,15 @@ object CalendarRepository {
             wuXingCount    = SxwnlNative.baziGetWuXingCount(handle, true) ?: IntArray(5)
             wuXingStatus   = SxwnlNative.baziGetWuXingStatus(handle)
                 ?: arrayOf("", "", "", "", "")
-            liuNian        = SxwnlNative.baziGetLiuNian(handle, startYear, 120)?.toList() ?: emptyList()
+            // 当前大运区间的 10 年流年/小运, 与鸿蒙 napi_bazi.cpp 的 "liuNian" 同义。
+            //   早先这里取的是"出生年起 120 年", 且起始年靠正则从 solarBirth 里抠
+            //   "(\d+)年" —— 而 getSolarBirth() 实际输出是 "『公历生日』 1984-02-10 …",
+            //   根本没有「年」字, 于是每次都静默回退到兜底值 1900, 整列流年全错。
+            //   现在直接用原生返回的大运起始年, 不再解析展示字符串。
+            val curDyStart = currentDaYun?.startYear ?: 0
+            liuNian = if (curDyStart <= 0) emptyList()
+                      else SxwnlNative.baziGetLiuNian(handle, curDyStart, 10)?.toList()
+                          ?: emptyList()
 
             // 按大运分组的流年: 每个大运取 10 个流年, 与鸿蒙 NAPI liuNianAll 对齐.
             //   12 个大运 × 10 流年 = 120 次 JNI 调用 — 单次开销 < 1ms, 总耗时
@@ -138,12 +146,6 @@ object CalendarRepository {
                     ?.toList() ?: emptyList()
             }
         }
-    }
-
-    /** "公历 2024年01月01日 ..." → 2024 */
-    private fun parseYearFrom(birth: String): Int? {
-        val m = Regex("""(-?\d+)年""").find(birth) ?: return null
-        return m.groupValues[1].toIntOrNull()
     }
 
     // ═══ Bazi - 工具 ═════════════════════════════════════════

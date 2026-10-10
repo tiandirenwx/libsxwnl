@@ -695,7 +695,7 @@ private struct SolarShareSnapshot: View {
             Text("食分 \(String(format: "%.3f", item.magnitude))  ·  食带宽 \(item.pathWidthKm > 0 ? String(format: "%.0f km", item.pathWidthKm) : "—")")
                 .font(.system(size: 12))
                 .foregroundColor(.gray)
-            Text("libsxwnl · 寿星万年历")
+            Text("禄命堂 · 基于寿星万年历内核")
                 .font(.system(size: 10))
                 .foregroundColor(.gray)
         }
@@ -936,7 +936,7 @@ private struct LunarShareSnapshot: View {
             Text("食分 \(String(format: "%.3f", item.magnitude))  ·  \(item.season)")
                 .font(.system(size: 12))
                 .foregroundColor(.gray)
-            Text("libsxwnl · 寿星万年历")
+            Text("禄命堂 · 基于寿星万年历内核")
                 .font(.system(size: 10))
                 .foregroundColor(.gray)
         }

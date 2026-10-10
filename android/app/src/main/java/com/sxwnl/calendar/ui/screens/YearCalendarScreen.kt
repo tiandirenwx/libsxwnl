@@ -130,12 +130,20 @@ fun YearCalendarScreen() {
                     MonthRow(m)
                 }
                 Text(
-                    "数据来源: 寿星万年历内核(C++) · 节气精确到秒",
+                    "数据来源: 基于寿星万年历内核(C++) · 节气精确到秒",
                     fontSize = Dimens.fontSmall, color = TextSecondary,
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = Dimens.paddingLg)
+                        .padding(top = Dimens.paddingLg)
+                )
+                Text(
+                    "© 深圳市禄命文化传播有限公司",
+                    fontSize = Dimens.fontSmall, color = TextSecondary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = Dimens.paddingLg)
                 )
             }
         }

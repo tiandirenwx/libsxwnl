@@ -115,6 +115,8 @@ napi_value NapiCalcBazi(napi_env env, napi_callback_info info) {
     result.v("wuXingStatus", stArr);
 
     result.s("siLing", sxwnl_bazi_get_si_ling(bz));
+    result.s("taiYuan", sxwnl_bazi_get_tai_yuan(bz));
+    result.s("mingGong", sxwnl_bazi_get_ming_gong(bz));
 
     // 当前大运区间的流年 + 小运(10年)
     if (curDyStart > 0) {

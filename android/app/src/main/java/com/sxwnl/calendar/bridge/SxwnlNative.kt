@@ -97,6 +97,8 @@ object SxwnlNative {
     @JvmStatic external fun baziGetQiYun(handle: Long): String
     @JvmStatic external fun baziGetJiaoYun(handle: Long): String
     @JvmStatic external fun baziGetSiLing(handle: Long): String
+    @JvmStatic external fun baziGetTaiYuan(handle: Long): String
+    @JvmStatic external fun baziGetMingGong(handle: Long): String
 
     // ═══ Bazi - 完整盘面 ═════════════════════════════════════
 

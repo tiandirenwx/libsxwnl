@@ -419,6 +419,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/SxwnlCalendar/CppSources";
+				INFOPLIST_KEY_CFBundleDisplayName = "禄命堂";
 				"INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription" = "保存八字命书 / 日月食截图到相册";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -461,6 +462,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/SxwnlCalendar/CppSources";
+				INFOPLIST_KEY_CFBundleDisplayName = "禄命堂";
 				"INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription" = "保存八字命书 / 日月食截图到相册";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;

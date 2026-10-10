@@ -1,4 +1,4 @@
-# 寿星万年历 — iOS / iPadOS 版
+# 禄命堂 — iOS / iPadOS 版
 
 基于 `libsxwnl` C++20 核心库的 Apple 平台万年历应用，使用 **SwiftUI**。
 
@@ -9,7 +9,7 @@
 - **八字 (BaziView)**
   - 输入：姓名、性别、出生地经纬度、定气/平气夏至/平气冬至历法、真太阳时
   - 时间选择 (BaziDateTimePicker)：公历 / 农历 / 四柱反推 三 tab；wheel picker 选择月日时分；反推支持时辰未知
-  - 结果 (BaziResultView)：简洁版「宣纸命书」 + 专业版命盘表 + 大运/流年；支持 `ImageRenderer` 保存为图片到相册
+  - 结果 (BaziResultView)：经典版「宣纸命书」 + 专业版命盘表 + 大运/流年；支持 `ImageRenderer` 保存为图片到相册
 - **日月食 (EclipseView)** — 日食/月食搜索、日月出没 (含经纬度输入)
 
 ## 架构

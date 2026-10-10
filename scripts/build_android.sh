@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════
-# 寿星万年历 — Android 一键打包脚本
+# 禄命堂 — Android 一键打包脚本
 #
 # 用法:
 #   scripts/build_android.sh                # 默认: debug + release APK (本地分发)
@@ -152,7 +152,7 @@ publish_aab() {
 
 # ── 执行 ──
 echo "╔═══════════════════════════════════════╗"
-echo "║  寿星万年历 - Android 打包 ($TARGET)"
+echo "║  禄命堂 - Android 打包 ($TARGET)"
 echo "╚═══════════════════════════════════════╝"
 
 clean_all

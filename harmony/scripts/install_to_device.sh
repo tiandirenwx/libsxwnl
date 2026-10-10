@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # install_to_device.sh
-# 一键把寿星万年历鸿蒙版构建并安装到已连接的真机/模拟器
+# 一键把禄命堂鸿蒙版构建并安装到已连接的真机/模拟器
 # 前置条件：
 #   1. 已在 DevEco Studio 中配置好 signingConfigs（Project Structure → Signing Configs → Automatically generate signature）
 #   2. 已用 USB 连接 HarmonyOS NEXT 真机，并启用 USB 调试
@@ -155,4 +155,4 @@ info "安装 hap 到设备..."
 info "启动 ${BUNDLE_NAME}/${ABILITY_NAME} ..."
 "${HDC_RUN[@]}" shell aa start -a "$ABILITY_NAME" -b "$BUNDLE_NAME" || warn "自动启动失败，请手动在手机桌面点击应用图标"
 
-ok "完成！请在手机上查看 \"寿星万年历\"。"
+ok "完成！请在手机上查看 \"禄命堂\"。"

@@ -210,6 +210,45 @@ std::string kongWangStr(int gan, int zhi) {
     return std::string(Zhi[kw[0]]) + Zhi[kw[1]];
 }
 
+// ─── 胎元 ───
+std::array<int, 2> taiYuan(int monthGan, int monthZhi) {
+    if (monthGan < 0 || monthGan > 9 || monthZhi < 0 || monthZhi > 11) return {-1, -1};
+    return {(monthGan + 1) % 10, (monthZhi + 3) % 12};
+}
+std::string taiYuanStr(int monthGan, int monthZhi) {
+    auto ty = taiYuan(monthGan, monthZhi);
+    if (ty[0] < 0) return "";
+    return std::string(Gan[ty[0]]) + Zhi[ty[1]];
+}
+
+// ─── 命宫 ───
+std::array<int, 2> mingGong(int yearGan, int monthZhi, int hourZhi, bool afterZhongQi) {
+    if (yearGan < 0 || yearGan > 9 || monthZhi < 0 || monthZhi > 11 ||
+        hourZhi < 0 || hourZhi > 11)
+        return {-1, -1};
+
+    // 命宫本数: 寅一 卯二 辰三 … 亥十 子十一 丑十二。
+    auto num = [](int zhi) { return (zhi - 2 + 12) % 12 + 1; };
+
+    int m = num(monthZhi);
+    // 论命宫以中气为界: 已过本月中气者作次月计 (丑十二 → 寅一)。
+    if (afterZhongQi) m = m % 12 + 1;
+    int sum = m + num(hourZhi);
+    // sum ∈ [2,24]: 不满十四以十四减, 满十四以廿六减, 结果恒落在 [1,12]。
+    int r = (sum < 14) ? (14 - sum) : (26 - sum);
+
+    int zhi = (r + 1) % 12; // 本数还原为地支索引(子0起)
+    // 天干: 年干起五虎遁 —— 甲己丙寅, 乙庚戊寅, 丙辛庚寅, 丁壬壬寅, 戊癸甲寅。
+    int yinGan = ((yearGan % 5) * 2 + 2) % 10;
+    int gan = (yinGan + (zhi - 2 + 12) % 12) % 10;
+    return {gan, zhi};
+}
+std::string mingGongStr(int yearGan, int monthZhi, int hourZhi, bool afterZhongQi) {
+    auto mg = mingGong(yearGan, monthZhi, hourZhi, afterZhongQi);
+    if (mg[0] < 0) return "";
+    return std::string(Gan[mg[0]]) + Zhi[mg[1]];
+}
+
 // ─── 五行统计 ───
 std::array<int, 5> wuXingCount(const std::array<int, 8> &sz, bool includeCangGan) {
     std::array<int, 5> cnt{0, 0, 0, 0, 0};

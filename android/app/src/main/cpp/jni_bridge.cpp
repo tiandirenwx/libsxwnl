@@ -402,6 +402,8 @@ BAZI_STR_GETTER(baziGetJieQi,       sxwnl_bazi_get_jie_qi)
 BAZI_STR_GETTER(baziGetQiYun,       sxwnl_bazi_get_qi_yun)
 BAZI_STR_GETTER(baziGetJiaoYun,     sxwnl_bazi_get_jiao_yun)
 BAZI_STR_GETTER(baziGetSiLing,      sxwnl_bazi_get_si_ling)
+BAZI_STR_GETTER(baziGetTaiYuan,     sxwnl_bazi_get_tai_yuan)
+BAZI_STR_GETTER(baziGetMingGong,    sxwnl_bazi_get_ming_gong)
 
 #undef BAZI_STR_GETTER
 

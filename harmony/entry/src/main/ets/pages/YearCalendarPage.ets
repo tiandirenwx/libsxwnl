@@ -94,10 +94,17 @@ export struct YearCalendarPage {
               this.monthRow(m, idx)
             })
 
-            Text('数据来源: 寿星万年历内核(C++) · 节气精确到秒')
+            Text('数据来源: 基于寿星万年历内核(C++) · 节气精确到秒')
               .fontSize(AppDimens.FONT_SMALL)
               .fontColor(AppColors.TEXT_SECONDARY)
-              .margin({ top: AppDimens.PADDING_LG, bottom: AppDimens.PADDING_LG })
+              .margin({ top: AppDimens.PADDING_LG })
+              .textAlign(TextAlign.Center)
+              .width('100%')
+
+            Text('© 深圳市禄命文化传播有限公司')
+              .fontSize(AppDimens.FONT_SMALL)
+              .fontColor(AppColors.TEXT_SECONDARY)
+              .margin({ top: 2, bottom: AppDimens.PADDING_LG })
               .textAlign(TextAlign.Center)
               .width('100%')
           }

@@ -186,6 +186,7 @@ struct SxwnlBaziHandle {
     std::string userName, gender, solarBirth, lunarBirth;
     std::string dateOfBirth, shengXiao, age, lifa;
     std::string dingQiType, ast, jieQi, qiYun, jiaoYun;
+    std::string taiYuan, mingGong;
 
     void cacheStrings() {
         userName   = bazi->getUserName();
@@ -194,7 +195,7 @@ struct SxwnlBaziHandle {
         shengXiao  = bazi->getShenXiao();
         age        = bazi->getAge();
         lifa       = bazi->getLifa();
-        dingQiType = bazi->getDingQiType();  // 定气方式(历法), 用于简洁版"依据..."文案
+        dingQiType = bazi->getDingQiType();  // 定气方式(历法), 用于经典版"依据..."文案
         ast        = bazi->getAst();
         jieQi      = bazi->getJieQiTerms();   // 仅节气交接, 不含经纬度/真太阳时块
         qiYun      = bazi->getQiYun();
@@ -203,6 +204,10 @@ struct SxwnlBaziHandle {
         auto lunarInfo = bazi->getLunarInfo();
         dateOfBirth = std::get<0>(lunarInfo);  // 出生年代(年号)
         lunarBirth  = std::get<2>(lunarInfo);  // 农历生日
+
+        // 胎元(月柱干进一位、支进三位) / 命宫(月时相加, 论月以中气为界)
+        taiYuan  = bazi->getTaiYuan();
+        mingGong = bazi->getMingGong();
     }
 };
 
@@ -1007,6 +1012,20 @@ const char *sxwnl_bazi_get_si_ling(SxwnlBazi bazi) {
         auto sz = h->bazi->getSiZhuIndex();
         int g = bazi::siLing(sz[3], h->bazi->getDaysAfterJie());
         return (g >= 0) ? Gan[g] : "";
+    }, "");
+}
+
+const char *sxwnl_bazi_get_tai_yuan(SxwnlBazi bazi) {
+    return guard([&]() -> const char * {
+        auto *h = static_cast<SxwnlBaziHandle *>(bazi);
+        return h ? h->taiYuan.c_str() : "";
+    }, "");
+}
+
+const char *sxwnl_bazi_get_ming_gong(SxwnlBazi bazi) {
+    return guard([&]() -> const char * {
+        auto *h = static_cast<SxwnlBaziHandle *>(bazi);
+        return h ? h->mingGong.c_str() : "";
     }, "");
 }
 

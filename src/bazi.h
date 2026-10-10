@@ -92,7 +92,7 @@ public:
     void calcBaziPaiPan();
     
     std::string getLifa() const;
-    std::string getDingQiType() const; // 定气方式(历法)简洁标签, 供排盘简洁版"依据..."文案使用
+    std::string getDingQiType() const; // 定气方式(历法)简洁标签, 供排盘经典版"依据..."文案使用
     std::string getJieQiTerms() const; // 出生月首/末节交接(不含经纬度/真太阳时块)
     std::string getAst() const;
     std::string getUserName() const;
@@ -112,6 +112,11 @@ public:
     std::vector<int> getEndYearList() const;
     std::string printBazi() const;
 
+    // 胎元: 月柱干进一位、支进三位, 例 "丁巳"
+    std::string getTaiYuan() const;
+    // 命宫: 月时相加取支、年干五虎遁配干, 论月以中气为界, 例 "丙辰"
+    std::string getMingGong() const;
+
     // ── 供派生命理分析(bazi_analysis)使用的原始数据 ──
     // 四柱索引: [0]年干[1]年支[2]月干[3]月支[4]日干[5]日支[6]时干[7]时支
     std::array<int, 8> getSiZhuIndex() const { return arraySiZhu_; }
@@ -130,10 +135,31 @@ public:
     long double getBirthJd() const { return mBdJd_; }
     long double getBirthAstJd() const { return mAstJd_; }
 
+    // 出生月"中气"(月首节与月末节之间那个气)的儒略日。
+    // 八字以"节"划月, 但命宫论月以"中气"为界, 故单独给出。
+    long double getMidQiJd() const { return mMidQiJd_; }
+    long double getMidQiAstJd() const { return mMidQiAstJd_; }
+    // 出生时刻是否已过本月中气 (命宫论月用: 过中气者作次月计)
+    bool isAfterZhongQi() const;
+
 private:
+    // 平气排盘所需的"气年框架"。
+    // 一个气年 = 相邻两个至点之间, 被 24 等分; 其中 12 个"节"位于奇数分点。
+    // 由于相邻至点间隔逐年有十几分钟的起伏, 每个气年必须用自己的间隔 k, 跨气年
+    // 取节时不能借用邻年的 k, 否则节的时刻会偏出几十秒。
+    struct PingQiFrame
+    {
+        long double pzq{};   // 本气年起点至点(定冬至=冬至, 定夏至=夏至)
+        long double kPrev{}; // 上一气年的节间隔 = (pzq - ppzq)/12
+        long double k{};     // 本气年的节间隔   = (zq  - pzq )/12
+        long double b{};     // 本气年首节 = pzq + k/2  (小寒 / 小暑)
+        long double k1{};    // 下一气年的节间隔 = (nzq - zq)/12
+        long double b1{};    // 下一气年首节 = zq + k1/2
+    };
+
     void calcPingQiPaiPan();
     void calcDingQiPaiPan();
-    std::array<long double, 4> bkCalc(int year, int month, LiFaType lifa);
+    PingQiFrame bkCalc(int year, int month, LiFaType lifa);
     long double calcLichun(int year) const;
     std::string getJieQiIterms() const;
     std::tuple<int, double, double> calcJieQiTermsByPingQi();
@@ -157,10 +183,14 @@ private:
     long double mTailJieQiJd_{};
     long double mHeadJieQiAstJd_{};
     long double mTailJieQiAstJd_{};
+    long double mMidQiJd_{};    // 月首节与月末节之间的中气
+    long double mMidQiAstJd_{};
     long double mJyJd_{}; // 起运对应儒略世经数
     int mJyYear_;
     std::array<int, 3> arrayQiYunDelta_{};
     std::array<int, 8> arraySiZhu_{};
+    // arraySiZhu_ 零初始化后恰好等于"甲子", 与真实结果无法区分, 故单列一个完成标志
+    bool mPaiPanDone_{false};
     std::vector<int> vecShiShen_;
 };
 

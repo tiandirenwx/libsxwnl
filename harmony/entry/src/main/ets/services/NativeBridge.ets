@@ -139,6 +139,8 @@ export interface BaziResult {
   wuXingCount: number[]
   wuXingStatus: string[]
   siLing: string
+  taiYuan?: string   // 胎元: 月柱干进一位、支进三位
+  mingGong?: string  // 命宫: 月时相加取支、年干五虎遁配干
   liuNian: LiuNianItem[]
   // 每个大运对应的 10 年流年/小运 (与 daYunColumns 等长, 按相同顺序)
   // 用于专业版"切换大运 → 展示对应流年"

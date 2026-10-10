@@ -3,7 +3,7 @@ import UIKit
 
 // ════════════════════════════════════════════════════════════════
 //  BaziResultView — 与鸿蒙 components/BaziResultView.ets 对齐
-//  顶部切换: 简洁版(宣纸命书) / 专业版(命盘表)
+//  顶部切换: 经典版(宣纸命书) / 专业版(命盘表)
 // ════════════════════════════════════════════════════════════════
 
 /// 宣纸命书专用毛笔字体 (文悦古典明朝体, 与鸿蒙 WenYue.otf 同源).
@@ -26,6 +26,8 @@ struct BaziResultView: View {
     let arg: BaziResultArg
 
     @State private var proMode: Bool = false
+    /// 专业版选中的大运下标; -1 表示跟随命主当前大运
+    @State private var selectedDaYunIdx: Int = -1
     @State private var saveToast: String? = nil
     @Environment(\.dismiss) private var dismiss
 
@@ -64,14 +66,15 @@ struct BaziResultView: View {
     }
 
     private let colTitles = ["年柱", "月柱", "日柱", "时柱", "大运", "流年"]
-    private let labelW: CGFloat = 40
-    private let colW: CGFloat = 54
+    // 行首标签固定宽, 六柱等分剩余宽度。早先六柱按固定 54pt 排, 合计 40+6*54=364pt
+    // 超出窄机可用宽, 第六列(流年)被挤出可视区 —— 等分后任何机型都不截断。
+    private let labelW: CGFloat = 34
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 0) {
-                    versionToggle.padding(.top, AppDimens.paddingMd)
+                    versionToggle.padding(.top, AppDimens.paddingSm)
                     if proMode {
                         proReport
                         saveShareRow(makeImage: renderPro)
@@ -112,7 +115,7 @@ struct BaziResultView: View {
     private var versionToggle: some View {
         HStack(spacing: 0) {
             Button { proMode = false } label: {
-                Text("简洁版")
+                Text("经典版")
                     .font(.system(size: AppDimens.fontCaption,
                                   weight: !proMode ? .bold : .regular))
                     .foregroundColor(!proMode ? AppColors.onPrimary : AppColors.textSecondary)
@@ -135,7 +138,7 @@ struct BaziResultView: View {
         .clipShape(RoundedRectangle(cornerRadius: 17))
     }
 
-    // ════════════════════ 简洁版(宣纸命书) ════════════════════
+    // ════════════════════ 经典版(宣纸命书) ════════════════════
     private var simpleCard: some View {
         VStack(spacing: 0) {
             simpleReport
@@ -156,7 +159,7 @@ struct BaziResultView: View {
         .background(AppColors.background)
     }
 
-    // 保存为图片 + 分享到 (简洁版/专业版共用)
+    // 保存为图片 + 分享到 (经典版/专业版共用)
     private func saveShareRow(makeImage: @escaping () -> UIImage?) -> some View {
         HStack(spacing: 12) {
             Button {
@@ -191,7 +194,7 @@ struct BaziResultView: View {
             // 抬头 (单行, 不占额外竖向空间)
             HStack {
                 Spacer()
-                Text("☯ 八字命书")
+                Text("☯ 禄命堂八字命书")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(redColor)
             }
@@ -459,6 +462,7 @@ struct BaziResultView: View {
             Text("\(strip(arg.result.shengXiao))  \(strip(arg.result.age))")
                 .font(.system(size: AppDimens.fontCaption))
                 .foregroundColor(AppColors.textSecondary)
+                .lineSpacing(0)
             Text("公历 \(strip(arg.result.solarBirth))")
                 .font(.system(size: AppDimens.fontCaption))
                 .foregroundColor(AppColors.textSecondary)
@@ -467,46 +471,52 @@ struct BaziResultView: View {
                 .foregroundColor(AppColors.textSecondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppDimens.paddingMd)
+        .padding(.horizontal, AppDimens.paddingMd)
+        .padding(.vertical, AppDimens.paddingSm)
         .background(AppColors.surface)
         .cornerRadius(AppDimens.radiusMd)
         .padding(.horizontal, AppDimens.paddingMd)
-        .padding(.top, AppDimens.paddingMd)
+        .padding(.top, AppDimens.paddingXs)
     }
 
     private var paiPanTable: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 0) {
-                headerRow
-                starRow
-                ganRow
-                zhiRow
-                cangGanRow
-                textRow("纳音", rowValues(0))
-                textRow("星运", rowValues(1))
-                textRow("自坐", rowValues(2))
-                textRow("空亡", rowValues(3))
-                shenShaRow
-            }
+        VStack(alignment: .leading, spacing: 0) {
+            headerRow
+            starRow
+            ganRow
+            zhiRow
+            cangGanRow
+            textRow("纳音", rowValues(0))
+            textRow("星运", rowValues(1))
+            textRow("自坐", rowValues(2))
+            textRow("空亡", rowValues(3))
+            shenShaRow
         }
-        .padding(AppDimens.paddingSm)
+        .padding(.horizontal, AppDimens.paddingXs)
+        .padding(.vertical, AppDimens.paddingSm)
         .background(AppColors.surface)
         .cornerRadius(AppDimens.radiusMd)
         .padding(.horizontal, AppDimens.paddingMd)
-        .padding(.top, AppDimens.paddingMd)
+        .padding(.top, AppDimens.paddingXs)
+    }
+
+    /// 六柱单元格: 等分宽度, 单行不换行, 过窄时轻微缩字而不是折行
+    private func colCell<V: View>(_ v: V) -> some View {
+        v.lineLimit(1)
+            .minimumScaleFactor(0.75)
+            .frame(maxWidth: .infinity, alignment: .center)
     }
 
     private var headerRow: some View {
         HStack(spacing: 0) {
             Text("").frame(width: labelW)
             ForEach(Array(colTitles.enumerated()), id: \.offset) { i, t in
-                Text(t)
+                colCell(Text(t)
                     .font(.system(size: AppDimens.fontCaption, weight: .bold))
-                    .foregroundColor(i >= 4 ? AppColors.accent : AppColors.primary)
-                    .frame(width: colW, alignment: .center)
+                    .foregroundColor(i >= 4 ? AppColors.accent : AppColors.primary))
             }
         }
-        .frame(height: 28)
+        .frame(height: 20)
         .overlay(Rectangle()
             .frame(height: 1)
             .foregroundColor(AppColors.divider),
@@ -517,40 +527,37 @@ struct BaziResultView: View {
         HStack(spacing: 0) {
             labelCell("主星")
             ForEach(Array(allColumns.enumerated()), id: \.offset) { i, c in
-                Text(c.ganShiShen)
+                colCell(Text(c.ganShiShen)
                     .font(.system(size: AppDimens.fontCaption,
                                   weight: i == 2 ? .bold : .regular))
-                    .foregroundColor(i == 2 ? AppColors.primary : AppColors.textSecondary)
-                    .frame(width: colW, alignment: .center)
+                    .foregroundColor(i == 2 ? AppColors.primary : AppColors.textSecondary))
             }
         }
-        .frame(height: 26)
+        .frame(height: 18)
     }
 
     private var ganRow: some View {
         HStack(spacing: 0) {
             labelCell("天干")
             ForEach(Array(allColumns.enumerated()), id: \.offset) { _, c in
-                Text(c.gan)
-                    .font(.system(size: 26, weight: .bold))
-                    .foregroundColor(charColor(c.gan))
-                    .frame(width: colW, alignment: .center)
+                colCell(Text(c.gan)
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(charColor(c.gan)))
             }
         }
-        .frame(height: 44)
+        .frame(height: 30)
     }
 
     private var zhiRow: some View {
         HStack(spacing: 0) {
             labelCell("地支")
             ForEach(Array(allColumns.enumerated()), id: \.offset) { _, c in
-                Text(c.zhi)
-                    .font(.system(size: 26, weight: .bold))
-                    .foregroundColor(charColor(c.zhi))
-                    .frame(width: colW, alignment: .center)
+                colCell(Text(c.zhi)
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(charColor(c.zhi)))
             }
         }
-        .frame(height: 44)
+        .frame(height: 30)
     }
 
     private var cangGanRow: some View {
@@ -559,7 +566,7 @@ struct BaziResultView: View {
             ForEach(Array(allColumns.enumerated()), id: \.offset) { _, c in
                 VStack(spacing: 0) {
                     ForEach(Array(c.cangGan.enumerated()), id: \.offset) { _, cg in
-                        HStack(spacing: 2) {
+                        HStack(spacing: 1) {
                             Text(cg.gan)
                                 .font(.system(size: AppDimens.fontSmall))
                                 .foregroundColor(charColor(cg.gan))
@@ -567,25 +574,26 @@ struct BaziResultView: View {
                                 .font(.system(size: AppDimens.fontSmall))
                                 .foregroundColor(AppColors.textSecondary)
                         }
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                     }
                 }
-                .frame(width: colW)
+                .frame(maxWidth: .infinity)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 3)
     }
 
     private func textRow(_ label: String, _ values: [String]) -> some View {
         HStack(spacing: 0) {
             labelCell(label)
             ForEach(Array(values.enumerated()), id: \.offset) { _, v in
-                Text(v)
+                colCell(Text(v)
                     .font(.system(size: AppDimens.fontSmall))
-                    .foregroundColor(AppColors.onSurface)
-                    .frame(width: colW, alignment: .center)
+                    .foregroundColor(AppColors.onSurface))
             }
         }
-        .frame(height: 24)
+        .frame(height: 18)
         .overlay(Rectangle()
             .frame(height: 0.5)
             .foregroundColor(AppColors.divider),
@@ -597,16 +605,18 @@ struct BaziResultView: View {
             labelCell("神煞").frame(maxHeight: .infinity, alignment: .top)
             ForEach(Array(allColumns.enumerated()), id: \.offset) { _, c in
                 VStack(spacing: 1) {
-                    ForEach(Array(c.shenSha.enumerated()), id: \.offset) { _, s in
+                    ForEach(Array(c.shenSha.filter { !$0.isEmpty }.prefix(8).enumerated()), id: \.offset) { _, s in
                         Text(s)
-                            .font(.system(size: 9))
+                            .font(.system(size: 8))
                             .foregroundColor(AppColors.textSecondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
                     }
                 }
-                .frame(width: colW)
+                .frame(maxWidth: .infinity)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 3)
         .overlay(Rectangle()
             .frame(height: 0.5)
             .foregroundColor(AppColors.divider),
@@ -622,18 +632,7 @@ struct BaziResultView: View {
 
     private var summaryBar: some View {
         VStack(spacing: AppDimens.paddingSm) {
-            HStack {
-                Text("司令")
-                    .font(.system(size: AppDimens.fontCaption))
-                    .foregroundColor(AppColors.textSecondary)
-                Text(arg.result.siLing)
-                    .font(.system(size: AppDimens.fontBody, weight: .bold))
-                    .foregroundColor(AppColors.primary)
-                Spacer()
-                Text(wuXingSummary())
-                    .font(.system(size: AppDimens.fontCaption))
-                    .foregroundColor(AppColors.onSurface)
-            }
+            siLingRow
             HStack(spacing: 4) {
                 let chips = statusChips()
                 ForEach(Array(chips.enumerated()), id: \.offset) { i, c in
@@ -641,116 +640,207 @@ struct BaziResultView: View {
                         .font(.system(size: AppDimens.fontCaption))
                         .foregroundColor(AppColors.onPrimary)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 28)
+                        .frame(height: 24)
                         .background(i < elemColors.count ? elemColors[i] : AppColors.primary)
                         .cornerRadius(AppDimens.radiusSm)
                 }
             }
         }
-        .padding(AppDimens.paddingMd)
+        .padding(.horizontal, AppDimens.paddingMd)
+        .padding(.vertical, AppDimens.paddingSm)
         .background(AppColors.surface)
         .cornerRadius(AppDimens.radiusMd)
         .padding(.horizontal, AppDimens.paddingMd)
-        .padding(.top, AppDimens.paddingMd)
+        .padding(.top, AppDimens.paddingXs)
+    }
+
+    /// 司令 / 命宫 / 胎元 + 含藏气。
+    /// 四段能在一行内排下就排一行; 排不下则把 命宫、胎元 整体挪到第二行,
+    /// 第一行保持 "司令 … 含藏气" 的原有版式。
+    /// ViewThatFits 取首个宽度够用的candidate, Spacer(minLength:) 保证一行版式
+    /// 的理想宽度包含中间的最小间距, 不会被判成"总是放得下"。
+    private var siLingRow: some View {
+        let extras = [("命宫", arg.result.mingGong), ("胎元", arg.result.taiYuan)]
+            .filter { !$0.1.trimmingCharacters(in: .whitespaces).isEmpty }
+
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                labeledGanZhi("司令", arg.result.siLing)
+                ForEach(extras, id: \.0) { labeledGanZhi($0.0, $0.1) }
+                Spacer(minLength: 10)
+                wuXingText
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 10) {
+                    labeledGanZhi("司令", arg.result.siLing)
+                    Spacer(minLength: 10)
+                    wuXingText
+                }
+                HStack(spacing: 12) {
+                    ForEach(extras, id: \.0) { labeledGanZhi($0.0, $0.1) }
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+    }
+
+    private var wuXingText: some View {
+        Text(wuXingSummary())
+            .font(.system(size: AppDimens.fontCaption))
+            .foregroundColor(AppColors.onSurface)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private func labeledGanZhi(_ label: String, _ value: String) -> some View {
+        HStack(spacing: 4) {
+            Text(label)
+                .font(.system(size: AppDimens.fontCaption))
+                .foregroundColor(AppColors.textSecondary)
+            Text(value)
+                .font(.system(size: AppDimens.fontBody, weight: .bold))
+                .foregroundColor(AppColors.primary)
+        }
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    /// 展示中的大运下标: 未手动选择时跟随命主当前大运
+    private var shownDaYunIdx: Int {
+        if selectedDaYunIdx >= 0 { return selectedDaYunIdx }
+        let i = arg.result.daYunColumns.firstIndex { $0.startYear == curDaYunStart }
+        return i ?? 0
+    }
+
+    /// 展示中大运那一桶的 10 年流年/小运。
+    /// 早先这里直接铺 result.liuNian —— 那是一条从出生年起算的长列表,
+    /// 与标题"当前大运"对不上, 是本卡年份显示错误的根因之一。
+    private var shownLiuNian: [LiuNianItem] {
+        let all = arg.result.liuNianAll
+        let i = shownDaYunIdx
+        return (i >= 0 && i < all.count) ? all[i] : []
+    }
+
+    /// "流年 / 小运（庚午 2022-2031 · 当前大运）"
+    private var liuNianTitle: String {
+        let dy = arg.result.daYunColumns
+        let i = shownDaYunIdx
+        guard i >= 0, i < dy.count, dy[i].startYear > 0 else { return "流年 / 小运" }
+        let c = dy[i]
+        let tag = c.startYear == curDaYunStart ? " · 当前大运" : ""
+        return "流年 / 小运（\(c.gan)\(c.zhi) \(c.startYear)-\(c.startYear + 9)\(tag)）"
     }
 
     private var liuNianCard: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("大运")
-                .font(.system(size: AppDimens.fontSubtitle, weight: .bold))
+            Text("大运（点击切换查看流年 / 小运）")
+                .font(.system(size: AppDimens.fontBody, weight: .bold))
                 .foregroundColor(AppColors.primary)
-                .padding(.bottom, AppDimens.paddingSm)
+                .padding(.bottom, 2)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 4) {
-                    ForEach(Array(arg.result.daYunColumns.enumerated()), id: \.offset) { _, c in
-                        proDaYunCell(c)
+                    ForEach(Array(arg.result.daYunColumns.enumerated()), id: \.offset) { i, c in
+                        proDaYunCell(c, isShown: i == shownDaYunIdx)
+                            .onTapGesture { selectedDaYunIdx = i }
                     }
                 }
             }
 
-            Text("流年 / 小运（当前大运）")
-                .font(.system(size: AppDimens.fontSubtitle, weight: .bold))
+            Text(liuNianTitle)
+                .font(.system(size: AppDimens.fontBody, weight: .bold))
                 .foregroundColor(AppColors.primary)
-                .padding(.top, AppDimens.paddingMd)
-                .padding(.bottom, AppDimens.paddingSm)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 4) {
-                    ForEach(Array(arg.result.liuNian.enumerated()), id: \.offset) { _, it in
-                        liuNianCell(it)
-                    }
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .padding(.top, AppDimens.paddingXs)
+                .padding(.bottom, 2)
+            // 10 年等分铺满, 不再横向滚动, 避免窄屏右侧年份被切掉
+            HStack(alignment: .top, spacing: 2) {
+                ForEach(Array(shownLiuNian.enumerated()), id: \.offset) { _, it in
+                    liuNianCell(it)
+                        .frame(maxWidth: .infinity)
                 }
             }
         }
-        .padding(AppDimens.paddingLg)
+        .padding(.horizontal, AppDimens.paddingMd)
+        .padding(.vertical, AppDimens.paddingSm)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppColors.surface)
         .cornerRadius(AppDimens.radiusLg)
         .padding(.horizontal, AppDimens.paddingMd)
-        .padding(.top, AppDimens.paddingMd)
+        .padding(.top, AppDimens.paddingXs)
         .shadow(color: Color.black.opacity(0.06), radius: 4, y: 2)
     }
 
-    private func proDaYunCell(_ c: BaziColumn) -> some View {
-        let isCur = c.startYear == curDaYunStart
-        return VStack(spacing: 0) {
+    private func proDaYunCell(_ c: BaziColumn, isShown: Bool) -> some View {
+        VStack(spacing: 0) {
             Text(c.ganShiShen)
                 .font(.system(size: 9))
                 .foregroundColor(AppColors.textSecondary)
             Text(c.gan)
-                .font(.system(size: 18, weight: .bold))
+                .font(.system(size: 17, weight: .bold))
                 .foregroundColor(charColor(c.gan))
             Text(c.zhi)
-                .font(.system(size: 18, weight: .bold))
+                .font(.system(size: 17, weight: .bold))
                 .foregroundColor(charColor(c.zhi))
             Text("\(c.startYear)")
                 .font(.system(size: 9))
-                .foregroundColor(AppColors.textSecondary)
-                .padding(.top, 2)
+                .foregroundColor(c.startYear == curDaYunStart
+                                 ? AppColors.accent : AppColors.textSecondary)
         }
-        .frame(width: 48)
-        .padding(.vertical, 4)
-        .background(isCur ? redBg : AppColors.background)
+        .frame(width: 46)
+        .padding(.vertical, 3)
+        .background(isShown ? redBg : AppColors.background)
         .cornerRadius(AppDimens.radiusSm)
+        .contentShape(Rectangle())
     }
 
     private func liuNianCell(_ it: LiuNianItem) -> some View {
-        let isCur = it.year == curLiuNianYear
+        let shownIsCurDaYun: Bool = {
+            let dy = arg.result.daYunColumns
+            let i = shownDaYunIdx
+            return i >= 0 && i < dy.count && dy[i].startYear == curDaYunStart
+        }()
+        let isCur = shownIsCurDaYun && it.year == curLiuNianYear
         return VStack(spacing: 0) {
             Text("\(it.year)")
-                .font(.system(size: 9))
+                .font(.system(size: 8))
                 .foregroundColor(AppColors.textSecondary)
             Text("\(it.age)岁")
-                .font(.system(size: 9))
+                .font(.system(size: 8))
                 .foregroundColor(AppColors.lunarText)
-            HStack(spacing: 1) {
-                Text(it.ganZhi)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(AppColors.onSurface)
-                Text(it.ganShiShen)
-                    .font(.system(size: 9))
-                    .foregroundColor(AppColors.accent)
-            }
-            .padding(.top, 2)
-            HStack(spacing: 1) {
-                Text(it.xiaoYun)
-                    .font(.system(size: 11))
-                    .foregroundColor(AppColors.textSecondary)
-                Text(it.xiaoYunShiShen)
-                    .font(.system(size: 9))
-                    .foregroundColor(AppColors.lunarText)
-            }
+            Text(it.ganZhi)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(AppColors.onSurface)
+            Text(it.ganShiShen)
+                .font(.system(size: 8))
+                .foregroundColor(AppColors.accent)
+            Text(it.xiaoYun)
+                .font(.system(size: 10))
+                .foregroundColor(AppColors.textSecondary)
+            Text(it.xiaoYunShiShen)
+                .font(.system(size: 8))
+                .foregroundColor(AppColors.lunarText)
         }
-        .frame(width: 54)
-        .padding(.vertical, 4)
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+        .padding(.vertical, 2)
+        .frame(maxWidth: .infinity)
         .background(isCur ? redBg : AppColors.background)
         .cornerRadius(AppDimens.radiusSm)
     }
 
     // ── 工具 ────────────────────────────────────────────────
+    private var emptyColumn: BaziColumn {
+        BaziColumn(gan: "", zhi: "", ganShiShen: "", nayin: "",
+                   xingYun: "", ziZuo: "", kongWang: "",
+                   cangGan: [], shenSha: [], startYear: 0)
+    }
+
     private var allColumns: [BaziColumn] {
         var list = arg.result.columns
-        if let d = arg.result.currentDaYun { list.append(d) }
-        if let l = arg.result.currentLiuNian { list.append(l) }
+        while list.count < 4 { list.append(emptyColumn) }
+        list.append(arg.result.currentDaYun ?? emptyColumn)
+        list.append(arg.result.currentLiuNian ?? emptyColumn)
         return list
     }
 

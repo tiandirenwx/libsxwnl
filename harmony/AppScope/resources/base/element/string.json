@@ -2,7 +2,11 @@
   "string": [
     {
       "name": "app_name",
-      "value": "寿星万年历"
+      "value": "禄命堂"
+    },
+    {
+      "name": "copyright",
+      "value": "© 深圳市禄命文化传播有限公司"
     }
   ]
 }

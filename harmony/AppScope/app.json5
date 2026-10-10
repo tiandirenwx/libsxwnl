@@ -1,7 +1,7 @@
 {
   "app": {
     "bundleName": "com.sxwnl.calendar",
-    "vendor": "",
+    "vendor": "深圳市禄命文化传播有限公司",
     "versionCode": 1000000,
     "versionName": "1.0.0",
     "icon": "$media:app_icon",

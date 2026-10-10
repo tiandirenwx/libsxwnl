@@ -306,6 +306,10 @@ int sxwnl_bazi_get_da_yun_columns(SxwnlBazi bazi, SxwnlBaziColumn *out, int max_
 
 // 司令天干名(人元司令分野)
 const char* sxwnl_bazi_get_si_ling(SxwnlBazi bazi);
+// 胎元干支(月柱干进一位、支进三位), 例 "丁巳"
+const char* sxwnl_bazi_get_tai_yuan(SxwnlBazi bazi);
+// 命宫干支(月时相加取支、年干五虎遁配干; 论月以中气为界), 例 "丙辰"
+const char* sxwnl_bazi_get_ming_gong(SxwnlBazi bazi);
 // 五行统计(木火土金水); include_cang_gan=true 含藏气
 void sxwnl_bazi_get_wuxing_count(SxwnlBazi bazi, int out[5], bool include_cang_gan);
 // 五行旺衰(木火土金水) → "旺""相""休""囚""死"
